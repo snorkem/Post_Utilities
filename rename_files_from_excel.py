@@ -14,7 +14,6 @@ MASTER_FILE_SUFFIX = '_M'  # This goes after every file name to denote it is a m
 excel_file = Path(sys.argv[1])
 target_dir = Path(sys.argv[2])
 
-
 # Read the excel file into
 df = pd.read_excel(excel_file)
 
@@ -42,7 +41,8 @@ def is_ascii(filename, index):
             print(f'Invalid path char detected in Master Original Names column {index+2}')
             logger.error(f'Invalid path char detected in Master Original Names column {index+2}')
             quit()
-        return True
+        else:
+            return True
     except UnicodeEncodeError:
         print(f'Non-ascii name in proxy name {filename} on row {index+2}. Quiting.')
         logger.error(f'Non-ascii name in proxy name {filename} on row {index+2}. Quiting.')
@@ -116,13 +116,10 @@ def main():
         if is_ascii(file, series_name) is False:
             quit()
     # Check if columns have any duplicate entries. Quit program if they do.
-    proxy_dup_check = are_there_dups(proxy_names)
-    master_dup_check = are_there_dups(master_file_names)
-    print(master_dup_check)
-    if proxy_dup_check is True:
+    if are_there_dups(proxy_names) is True:
         print(f'Dups found in {RENAME_TO_COL}. Fix.'), logger.info('Dups found in proxy names columns. Fix.')
         quit()
-    elif master_dup_check is True:
+    elif are_there_dups(master_file_names) is True:
         print(f'Dups found in {FILES_TO_RENAME_COL}. Fix.'), logger.info('Dups found in proxy names columns. Fix.')
         quit()
     else:
