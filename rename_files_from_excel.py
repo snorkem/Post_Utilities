@@ -5,20 +5,20 @@ import sys
 import re
 import logging
 
-# Column names to search in the excel sheet. Program will use the first sheet in the file, ignoring others.
+
+# Column names to search in the Excel sheet. Program will use the first sheet in the file, ignoring others.
 FILES_TO_RENAME_COL = 'Master Original Name'
 RENAME_TO_COL = 'Avid Proxy Name'
 MASTER_FILE_SUFFIX = '_M'  # This goes after every file name to denote it is a master file.
 
-# Get excel file as user args
+# Get Excel file as user args
 excel_file = Path(sys.argv[1])
 target_dir = Path(sys.argv[2])
 
-# Read the excel file into
+# Read the Excel file into dataframe
 df = pd.read_excel(excel_file)
 
 # Define columns from spreadsheet to pull from by their headers.
-# Can be modified for another project or if the spreadsheet changes.
 proxy_names = df[RENAME_TO_COL]
 master_file_names = df[FILES_TO_RENAME_COL]
 
