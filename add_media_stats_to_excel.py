@@ -78,9 +78,12 @@ def get_file_stats(file: Path, stats_to_update):
         media_stats = json.loads(out)['streams'][0]
         try:
             start_tc = json.loads(out)['streams'][2]['tags']['timecode']
-        except KeyError as e:
-            print('No start tc for this clip. Assume zero.')
-            start_tc = '00:00:00:00'
+        except IndexError as e:
+            try:
+                start_tc = json.loads(out)['streams'][2]['tags']['timecode']
+            except IndexError:
+                print('No start tc for this clip. Assume zero.')
+                start_tc = '00:00:00:00'
         print(media_stats)
         print(start_tc)
         start_tc = convert_json_tc(str(media_stats['r_frame_rate']), str(start_tc))
