@@ -62,8 +62,11 @@ def get_file_paths(target_dir):
     return files_to_rename
 
 def convert_json_tc(fps, tc_from_json):
-    tc1 = Timecode(fps, tc_from_json)
-    tc1.set_fractional(False)
+    try:
+        tc1 = Timecode(fps, tc_from_json)
+        tc1.set_fractional(False)
+    except ZeroDivisionError:
+        return 'Something horribly wrong the the framerate tags in the file.'
     return tc1
 
 def get_file_stats(file: Path, stats_to_update):
@@ -80,7 +83,7 @@ def get_file_stats(file: Path, stats_to_update):
             start_tc = json.loads(out)['streams'][2]['tags']['timecode']
         except IndexError as e:
             try:
-                start_tc = json.loads(out)['streams'][2]['tags']['timecode']
+                start_tc = json.loads(out)['streams'][1]['tags']['timecode']
             except IndexError:
                 print('No start tc for this clip. Assume zero.')
                 start_tc = '00:00:00:00'
