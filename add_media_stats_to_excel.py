@@ -61,8 +61,8 @@ def get_file_paths(target_dir):
             files_to_rename.remove(file)
     return files_to_rename
 
-def convert_duration_tc_(fps, duration_from_json):
-    tc1 = Timecode(fps, duration_from_json)
+def convert_json_tc(fps, tc_from_json):
+    tc1 = Timecode(fps, tc_from_json)
     tc1.set_fractional(False)
     return tc1
 
@@ -76,13 +76,20 @@ def get_file_stats(file: Path, stats_to_update):
         print(err)
     try:
         media_stats = json.loads(out)['streams'][0]
-        start_tc = convert_duration_tc_(str(media_stats['r_frame_rate']), str(media_stats['start_time']))
+        try:
+            start_tc = json.loads(out)['streams'][2]['tags']['timecode']
+        except KeyError as e:
+            print('No start tc for this clip. Assume zero.')
+            start_tc = '00:00:00:00'
+        print(media_stats)
+        print(start_tc)
+        start_tc = convert_json_tc(str(media_stats['r_frame_rate']), str(start_tc))
         stats_to_update.update({
             'Width': str(media_stats['width']),
             'Height': str(media_stats['height']),
             'Codec': str(media_stats['codec_name']),
             'Frame Rate': str(Timecode(media_stats['r_frame_rate']).framerate),
-            'Duration': str(convert_duration_tc_(str(media_stats['r_frame_rate']), str(media_stats['duration']))),
+            'Duration': str(convert_json_tc(str(media_stats['r_frame_rate']), str(media_stats['duration']))),
             'Start Time': str(start_tc)
         })
     except KeyError as e:
