@@ -85,8 +85,6 @@ def get_file_stats(file: Path, stats_to_update):
         for stream_id, stream_data in enumerate(mstats):
             count += 1
             try:
-                print(stream_id)
-                print(stream_data)
                 tc = mstats[stream_id]['tags']['timecode']
                 print('Found start tc')
                 print(tc)
