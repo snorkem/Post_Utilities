@@ -66,6 +66,7 @@ def convert_json_tc(fps, tc_from_json):
         tc1 = Timecode(fps, tc_from_json)
         tc1.set_fractional(False)
     except ZeroDivisionError:
+        print('Something horribly wrong the the framerate tags in the file.')
         return 'Something horribly wrong the the framerate tags in the file.'
     return tc1
 
@@ -77,19 +78,24 @@ def get_file_stats(file: Path, stats_to_update):
     if err:
         print("========= error ========")
         print(err)
-    try:
+    try: # Tring to get the start timecode, which can be in a different stream depending on the file.
         media_stats = json.loads(out)['streams'][0]
-        try:
-            start_tc = json.loads(out)['streams'][2]['tags']['timecode']
-        except IndexError as e:
+        mstats = json.loads(out)['streams']
+        count = 0
+        for stream_id, stream_data in enumerate(mstats):
+            count += 1
             try:
-                start_tc = json.loads(out)['streams'][1]['tags']['timecode']
-            except IndexError:
+                print(stream_id)
+                print(stream_data)
+                tc = mstats[stream_id]['tags']['timecode']
+                print('Found start tc')
+                print(tc)
+            except KeyError:
+                print('Looking for timecode start')
+            if count == len(mstats) and isinstance(mstats, str):
                 print('No start tc for this clip. Assume zero.')
-                start_tc = '00:00:00:00'
-        print(media_stats)
-        print(start_tc)
-        start_tc = convert_json_tc(str(media_stats['r_frame_rate']), str(start_tc))
+                tc = '00:00:00:00'
+        start_tc = convert_json_tc(str(media_stats['r_frame_rate']), str(tc))
         stats_to_update.update({
             'Width': str(media_stats['width']),
             'Height': str(media_stats['height']),
@@ -109,13 +115,15 @@ def update_df_stats(df_in: pd.DataFrame, file_col: str):
         file_name_in_list = value[file_col]
         for file in target_files:
             file_name = os.path.splitext(os.path.basename(file))[0]
+            print(f'Looking at {file_name}')
             file_ext = os.path.splitext(os.path.basename(file))[1]
             if file_name == file_name_in_list:
-                print(f'Looking at: {file_name}')
                 print(f'{file} found! Matches name in spreadsheet.')
                 try:
+                    new_file_stats = STATS_TO_UPDATE.fromkeys(STATS_TO_UPDATE, 'Unknown')
+                    # print(f'Resetting stats to update to: {new_file_stats}')
                     new_file_stats = get_file_stats(file, STATS_TO_UPDATE)
-                    # print(new_file_stats)
+                    # print(f'New file stats: {new_file_stats}')
                     df_in.at[row, FILE_SIZE_COL] = get_file_size_GB(file)
                     df_in.at[row, DIMENSIONS_COL] = str(new_file_stats['Width'] + ' x ' + new_file_stats['Height'])
                     df_in.at[row, CODEC_COL] = str(new_file_stats['Codec'])
