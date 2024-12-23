@@ -86,11 +86,10 @@ def get_file_stats(file: Path, stats_to_update):
             count += 1
             try:
                 tc = mstats[stream_id]['tags']['timecode']
-                print('Found start tc')
-                print(tc)
+                print(f'Found start TC in stream {stream_id}: {tc}')
             except KeyError:
-                print('Looking for timecode start')
-            if count == len(mstats) and isinstance(mstats, str):
+                print(f'Could not find start TC flags in stream {str(stream_id)}... Looping through rest of streams.')
+            if count > len(mstats) and isinstance(mstats, list):
                 print('No start tc for this clip. Assume zero.')
                 tc = '00:00:00:00'
         start_tc = convert_json_tc(str(media_stats['r_frame_rate']), str(tc))
@@ -104,6 +103,9 @@ def get_file_stats(file: Path, stats_to_update):
         })
     except KeyError as e:
         print(f'Error getting stream info from file, also, this: {e}')
+    except UnboundLocalError as e:
+        print(e)
+        print(f'Unbound local error. Probably couldbn\'t find start TC in the file. Assuming 00:00:00:00.')
     return stats_to_update
 
 # Populate dataframe rows
@@ -113,7 +115,7 @@ def update_df_stats(df_in: pd.DataFrame, file_col: str):
         file_name_in_list = value[file_col]
         for file in target_files:
             file_name = os.path.splitext(os.path.basename(file))[0]
-            print(f'Looking at {file_name}')
+            # print(f'Looking at {file_name}')
             file_ext = os.path.splitext(os.path.basename(file))[1]
             if file_name == file_name_in_list:
                 print(f'{file} found! Matches name in spreadsheet.')
