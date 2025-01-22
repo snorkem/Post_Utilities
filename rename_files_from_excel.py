@@ -51,14 +51,17 @@ def is_ascii(filename, index):
         print(f'Empty cell, perhaps, on line {index+2}?')
         logger.error(f'Empty cell, perhaps, on line {index+2}?')
 
+files_to_rename = []
 def get_files_to_rename(target_dir):
-    files_to_rename = []
     if target_dir.is_dir() is True:
         print('Target is directory. Continuing.'), logger.info('Target is directory. Continuing.')
         logging.info('This is a test.')
         for file_path in target_dir.iterdir():
             if Path(file_path).is_file():
                 files_to_rename.append(file_path)
+            elif Path(file_path).is_dir():
+                print('Looking at subdirectory:' + str(file_path))
+                get_files_to_rename(file_path) # recursively get all files into the list of paths
     else:
         print('Target is not a directory')
         quit()
