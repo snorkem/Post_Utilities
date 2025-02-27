@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # ================================================
-# File Search and Copy Utility
+# File Search and Copy Utility -- written with Claude Sonnet 3.7
 # ================================================
 # This script searches for files in a source directory based on a list
 # of filenames (with wildcard support) and copies them to a destination
