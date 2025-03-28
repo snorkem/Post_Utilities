@@ -1,6 +1,7 @@
 #!/bin/zsh
 
 # ================================================
+# v2.5
 # File Search and Copy Utility -- written with Claude Sonnet 3.7
 # ================================================
 # This script searches for files in a source directory based on a list
@@ -13,22 +14,38 @@
 
 # Display usage information
 usage() {
-    echo "Usage: $0 -s SOURCE_DIR -d DEST_DIR -f FILE_LIST -l LOG_FILE"
-    echo ""
-    echo "Options:"
-    echo "  -s SOURCE_DIR   Directory to search in"
-    echo "  -d DEST_DIR     Directory to copy files to"
-    echo "  -f FILE_LIST    File containing list of filenames to search for (one per line)"
-    echo "  -l LOG_FILE     Log file to write operations to (will append if exists)"
-    echo "  -h              Display this help message"
+    cat << EOF
+Usage: $0 -s SOURCE_DIR -d DEST_DIR -f FILE_LIST [-l LOG_FILE] [-h]
+
+Options:
+  -s SOURCE_DIR   Directory to search in (required)
+  -d DEST_DIR     Directory to copy files to (required)
+  -f FILE_LIST    File containing list of filenames to search for (required)
+  -l LOG_FILE     Log file to write operations to (optional, defaults to script name with .log)
+  -h              Display this help message
+EOF
     exit 1
 }
 
-# Initialize variables
+# Error handling function
+error_exit() {
+    echo "ERROR: $1" >&2
+    exit 1
+}
+
+# Log message function
+log_message() {
+    local log_file="$1"
+    local message="$2"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $message" >> "$log_file"
+}
+
+# Initialize variables with defaults
 SOURCE_DIR=""
 DEST_DIR=""
 FILE_LIST=""
-LOG_FILE=""
+LOG_FILE="${0%.sh}.log"
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
 # Process command line arguments
 while getopts "s:d:f:l:h" opt; do
@@ -43,170 +60,143 @@ while getopts "s:d:f:l:h" opt; do
 done
 
 # Validate required parameters
-if [[ -z "$SOURCE_DIR" || -z "$DEST_DIR" || -z "$FILE_LIST" || -z "$LOG_FILE" ]]; then
-    echo "Error: Missing required parameters"
-    usage
-fi
+[[ -z "$SOURCE_DIR" ]] && error_exit "Source directory is required"
+[[ -z "$DEST_DIR" ]] && error_exit "Destination directory is required"
+[[ -z "$FILE_LIST" ]] && error_exit "File list is required"
 
-# Ensure source directory exists
-if [[ ! -d "$SOURCE_DIR" ]]; then
-    echo "Error: Source directory does not exist: $SOURCE_DIR"
-    exit 1
-fi
+# Validate directories and file list
+[[ ! -d "$SOURCE_DIR" ]] && error_exit "Source directory does not exist: $SOURCE_DIR"
+[[ ! -f "$FILE_LIST" ]] && error_exit "File list does not exist: $FILE_LIST"
 
-# Ensure file list exists
-if [[ ! -f "$FILE_LIST" ]]; then
-    echo "Error: File list does not exist: $FILE_LIST"
-    exit 1
-fi
+# Ensure destination directory exists
+mkdir -p "$DEST_DIR" || error_exit "Failed to create destination directory: $DEST_DIR"
 
-# Create destination directory if it doesn't exist
-if [[ ! -d "$DEST_DIR" ]]; then
-    mkdir -p "$DEST_DIR"
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to create destination directory: $DEST_DIR"
-        exit 1
-    fi
-    echo "Created destination directory: $DEST_DIR"
-fi
+# Create log directory if needed
+mkdir -p "$(dirname "$LOG_FILE")" || error_exit "Failed to create log directory"
 
-# Check if log file directory exists and is writable
-LOG_DIR=$(dirname "$LOG_FILE")
-if [[ ! -d "$LOG_DIR" ]]; then
-    mkdir -p "$LOG_DIR"
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to create log directory: $LOG_DIR"
-        exit 1
-    fi
-fi
+# Setup missing and existing files logs
+MISSING_FILES_LOG="${LOG_FILE}.missing"
+EXISTING_FILES_LOG="${LOG_FILE}.existing"
 
-# Initialize or append to log file with header
-# Check if the log file exists
-if [[ -f "$LOG_FILE" ]]; then
-    # Append a separator and new session header to existing log
-    if ! {
-        echo "" >> "$LOG_FILE"
-        echo "======================================================" >> "$LOG_FILE"
-        echo "NEW SESSION: File Search and Copy Operation - $(date)" >> "$LOG_FILE"
-        echo "======================================================" >> "$LOG_FILE"
-    }; then
-        echo "Error: Cannot write to log file: $LOG_FILE"
-        exit 1
-    fi
+# Initialize or append to missing files log
+if [[ -f "$MISSING_FILES_LOG" ]]; then
+    echo "" >> "$MISSING_FILES_LOG"
+    echo "=== Missing Files Session: $TIMESTAMP ===" >> "$MISSING_FILES_LOG"
+    echo "Source Directory: $SOURCE_DIR" >> "$MISSING_FILES_LOG"
 else
-    # Create new log file with initial header
-    if ! {
-        echo "======================================================" > "$LOG_FILE"
-        echo "File Search and Copy Operation - $(date)" >> "$LOG_FILE"
-        echo "======================================================" >> "$LOG_FILE"
-    }; then
-        echo "Error: Cannot write to log file: $LOG_FILE"
-        exit 1
-    fi
+    {
+        echo "=== Missing Files Log ===" > "$MISSING_FILES_LOG"
+        echo "=== First Session: $TIMESTAMP ===" >> "$MISSING_FILES_LOG"
+        echo "Source Directory: $SOURCE_DIR" >> "$MISSING_FILES_LOG"
+    }
 fi
 
-# Continue with log file initialization
-echo "Source Directory: $SOURCE_DIR" >> "$LOG_FILE"
-echo "Destination Directory: $DEST_DIR" >> "$LOG_FILE"
-echo "File List: $FILE_LIST" >> "$LOG_FILE"
-echo "======================================================" >> "$LOG_FILE"
-echo "" >> "$LOG_FILE"
-
-# Counter for statistics
-total_patterns=0
-found_files=0
-copied_files=0
-skipped_files=0
-
-# Make sure the file list is readable
-if [[ ! -r "$FILE_LIST" ]]; then
-    echo "Error: File list is not readable: $FILE_LIST"
-    exit 1
+# Initialize or append to existing files log
+if [[ -f "$EXISTING_FILES_LOG" ]]; then
+    echo "" >> "$EXISTING_FILES_LOG"
+    echo "=== Existing Files Session: $TIMESTAMP ===" >> "$EXISTING_FILES_LOG"
+    echo "Source Directory: $SOURCE_DIR" >> "$EXISTING_FILES_LOG"
+else
+    {
+        echo "=== Existing Files Log ===" > "$EXISTING_FILES_LOG"
+        echo "=== First Session: $TIMESTAMP ===" >> "$EXISTING_FILES_LOG"
+        echo "Source Directory: $SOURCE_DIR" >> "$EXISTING_FILES_LOG"
+    }
 fi
 
-# Process each file pattern in the list
+# Initialize main log file
+{
+    echo "======================================================" > "$LOG_FILE"
+    echo "File Search and Copy Operation - $(date)" >> "$LOG_FILE"
+    echo "Source Directory: $SOURCE_DIR" >> "$LOG_FILE"
+    echo "Destination Directory: $DEST_DIR" >> "$LOG_FILE"
+    echo "File List: $FILE_LIST" >> "$LOG_FILE"
+    echo "======================================================" >> "$LOG_FILE"
+} || error_exit "Cannot write to log file: $LOG_FILE"
+
+# Initialize counters
+typeset -i total_patterns=0 found_files=0 copied_files=0 skipped_files=0 missing_patterns=0 existing_files=0
+
+# Process file list
 while IFS= read -r file_pattern || [[ -n "$file_pattern" ]]; do
     # Skip empty lines and comments
-    if [[ -z "$file_pattern" || "$file_pattern" =~ ^[[:space:]]*# ]]; then
-        continue
-    fi
+    [[ -z "$file_pattern" || "$file_pattern" =~ ^[[:space:]]*# ]] && continue
     
-    # Trim leading/trailing whitespace
-    file_pattern=$(echo "$file_pattern" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    # Trim whitespace
+    file_pattern=$(printf '%s' "$file_pattern" | xargs)
     
     ((total_patterns++))
+    log_message "$LOG_FILE" "Processing pattern: $file_pattern"
     
-    echo "Processing pattern: $file_pattern" >> "$LOG_FILE"
+    # Use improved find with error handling
+    mapfile -t found_files < <(find "$SOURCE_DIR" -type f -name "$file_pattern" 2>/dev/null)
     
-    # Use find command to locate files matching the pattern
-    # -type f ensures we only find files, not directories
-    found=$(find "$SOURCE_DIR" -type f -name "$file_pattern" 2>"$LOG_FILE.error")
-    
-    # Check for find command errors
-    if [[ -s "$LOG_FILE.error" ]]; then
-        echo "  ERROR during find operation:" >> "$LOG_FILE"
-        cat "$LOG_FILE.error" >> "$LOG_FILE"
-        rm -f "$LOG_FILE.error"
-    else
-        rm -f "$LOG_FILE.error"
-    fi
-    
-    # If no files found, log and continue
-    if [[ -z "$found" ]]; then
-        echo "  No files found matching: $file_pattern" >> "$LOG_FILE"
+    if (( ${#found_files[@]} == 0 )); then
+        # No files found in source directory
+        echo "$file_pattern" >> "$MISSING_FILES_LOG"
+        log_message "$LOG_FILE" "NO SOURCE: No files found matching pattern: $file_pattern"
+        ((missing_patterns++))
         continue
     fi
     
-    # Process each found file
-    echo "$found" | while IFS= read -r file; do
-        # Extract just the filename
+    # Process found files
+    for file in "${found_files[@]}"; do
         filename=$(basename "$file")
+        dest_file="$DEST_DIR/$filename"
         
-        # Log the found file
-        echo "  Found: $file" >> "$LOG_FILE"
+        log_message "$LOG_FILE" "  Found: $file"
+        ((found_files++))
         
-        # Update found_files counter (using a temp file to avoid subshell issues)
-        echo "found" >> "$LOG_FILE.count"
-        
-        # Check if destination file already exists
-        if [[ -f "$DEST_DIR/$filename" ]]; then
-            echo "  SKIPPED: File already exists in destination: $filename" >> "$LOG_FILE"
-            echo "skipped" >> "$LOG_FILE.count"
+        if [[ -f "$dest_file" ]]; then
+            echo "$filename" >> "$EXISTING_FILES_LOG"
+            log_message "$LOG_FILE" "  EXISTING: $filename already in destination"
+            log_message "$EXISTING_FILES_LOG" "$filename"
+            ((skipped_files++))
+            ((existing_files++))
         else
-            # Copy the file to destination only if it doesn't exist
-            if cp "$file" "$DEST_DIR/"; then
-                echo "  Copied to: $DEST_DIR/$filename" >> "$LOG_FILE"
-                echo "copied" >> "$LOG_FILE.count"
+            if cp -p "$file" "$dest_file"; then
+                log_message "$LOG_FILE" "  Copied to: $dest_file"
+                ((copied_files++))
             else
-                echo "  ERROR: Failed to copy: $file" >> "$LOG_FILE"
+                log_message "$LOG_FILE" "  ERROR: Failed to copy: $file"
             fi
         fi
     done
 done < "$FILE_LIST"
 
-# Count the operations from the temp file to avoid subshell variable scope issues
-if [[ -f "$LOG_FILE.count" ]]; then
-    found_files=$(grep -c "found" "$LOG_FILE.count")
-    copied_files=$(grep -c "copied" "$LOG_FILE.count")
-    skipped_files=$(grep -c "skipped" "$LOG_FILE.count")
-    rm -f "$LOG_FILE.count"
-fi
+# Log summary
+{
+    echo "" >> "$LOG_FILE"
+    echo "======================================================" >> "$LOG_FILE"
+    echo "Summary - $(date)" >> "$LOG_FILE"
+    echo "Patterns processed: $total_patterns" >> "$LOG_FILE"
+    echo "Files found: $found_files" >> "$LOG_FILE"
+    echo "Files copied: $copied_files" >> "$LOG_FILE"
+    echo "Files skipped (already existed): $skipped_files" >> "$LOG_FILE"
+    echo "Patterns with no matches: $missing_patterns" >> "$LOG_FILE"
+    echo "======================================================" >> "$LOG_FILE"
+} || error_exit "Failed to write summary to log file"
 
-# Log summary statistics
-echo "" >> "$LOG_FILE"
-echo "======================================================" >> "$LOG_FILE"
-echo "Summary - $(date)" >> "$LOG_FILE"
-echo "Patterns processed: $total_patterns" >> "$LOG_FILE"
-echo "Files found: $found_files" >> "$LOG_FILE"
-echo "Files copied: $copied_files" >> "$LOG_FILE"
-echo "Files skipped (already existed): $skipped_files" >> "$LOG_FILE"
-echo "======================================================" >> "$LOG_FILE"
-
-# Output summary to console
+# Console output
 echo "Operation completed. See $LOG_FILE for details."
 echo "Patterns processed: $total_patterns"
 echo "Files found: $found_files"
 echo "Files copied: $copied_files"
 echo "Files skipped (already existed): $skipped_files"
+echo "Patterns with no matches: $missing_patterns"
+
+# Provide log file information
+if [[ -s "$MISSING_FILES_LOG" ]]; then
+    missing_patterns_count=$(grep -c "=== Missing Files" "$MISSING_FILES_LOG")
+    echo "Missing files log created: $MISSING_FILES_LOG"
+    echo "Number of patterns with no source matches: $missing_patterns"
+fi
+
+if [[ -s "$EXISTING_FILES_LOG" ]]; then
+    existing_files_count=$(grep -c "=== Existing Files" "$EXISTING_FILES_LOG")
+    echo "Existing files log created: $EXISTING_FILES_LOG"
+    echo "Number of files already in destination: $existing_files"
+fi
 
 exit 0
+
