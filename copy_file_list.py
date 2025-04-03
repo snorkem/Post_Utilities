@@ -345,13 +345,22 @@ class FileFinder:
         self.case_sensitive = case_sensitive
         self.use_regex = use_regex
         self.max_workers = max_workers
+        # Track statistics
+        self.dirs_searched_set = set()  # To keep track of unique directories
+        self.total_dirs_searched = 0
+        
         if self.max_workers is None:
             # Use half of available CPU cores by default
             self.max_workers = max(1, multiprocessing.cpu_count() // 2)
         self.logger.debug(f"Initialized FileFinder with {self.max_workers} max workers")
     
+    def reset_statistics(self):
+        """Reset search statistics."""
+        self.dirs_searched_set = set()
+        self.total_dirs_searched = 0
+        
     def find_files_parallel(self, patterns: List[str], source_dirs: List[str], exclude_patterns: List[str] = None,
-                          max_size_mb: int = 0) -> Dict[str, List[str]]:
+                          max_size_mb: int = 0) -> Dict[str, Tuple[List[str], bool]]:
         """
         Find files matching multiple patterns across source directories using parallel processing.
         
@@ -362,51 +371,92 @@ class FileFinder:
             max_size_mb: Maximum file size in MB (0 for no limit)
             
         Returns:
-            Dictionary mapping each pattern to a list of found files
+            Dictionary mapping each pattern to a tuple (found_files, pattern_found)
         """
-        self.logger.debug(f"Starting parallel file search for {len(patterns)} patterns")
+        # Use the sequential debug version instead - much more reliable
+        return self.find_files_sequential(patterns, source_dirs, exclude_patterns, max_size_mb)
+    
+    def find_files_sequential(self, patterns: List[str], source_dirs: List[str], exclude_patterns: List[str] = None,
+                            max_size_mb: int = 0) -> Dict[str, Tuple[List[str], bool]]:
+        """
+        Sequential version of find_files_parallel.
         
-        # Create a list of tasks
-        tasks = []
-        for pattern in patterns:
-            tasks.append((pattern, source_dirs, exclude_patterns, max_size_mb))
+        This processes each pattern one by one with detailed logging.
+        """
+        self.logger.log("Using sequential processing with detailed logging")
+        self.reset_statistics()
         
-        # Create a pool of workers
-        with Pool(processes=self.max_workers) as pool:
-            # Map tasks to workers
-            results = pool.starmap(self._find_files_task, tasks)
-        
-        # Compile results
+        # Dictionary to store results
         pattern_to_files = {}
-        for pattern, found_files, pattern_found in results:
-            pattern_to_files[pattern] = (found_files, pattern_found)
+        all_dirs_searched = set()
         
-        self.logger.debug(f"Completed parallel file search")
+        # Process each pattern
+        for pattern in patterns:
+            try:
+                self.logger.debug(f"Processing pattern: {pattern}")
+                
+                # Find files for this pattern
+                found_files, pattern_found, dirs_searched = self.find_file(
+                    pattern, source_dirs, exclude_patterns, max_size_mb
+                )
+                
+                # Store results
+                pattern_to_files[pattern] = (found_files, pattern_found)
+                all_dirs_searched.update(dirs_searched)
+                
+                # Log results
+                if found_files:
+                    self.logger.debug(f"Found {len(found_files)} files for pattern {pattern}")
+                    for i, file_path in enumerate(found_files[:3]):
+                        self.logger.debug(f"  Match {i+1}: {file_path}")
+                else:
+                    self.logger.debug(f"No files found for pattern {pattern}")
+            
+            except Exception as e:
+                self.logger.log(f"Error processing pattern {pattern}: {str(e)}")
+                self.logger.debug(traceback.format_exc())
+                # Store empty results in case of error
+                pattern_to_files[pattern] = ([], False)
+        
+        # Store the directories searched
+        self.dirs_searched_set = all_dirs_searched
+        self.total_dirs_searched = len(self.dirs_searched_set)
+        
         return pattern_to_files
     
-    def _find_files_task(self, pattern: str, source_dirs: List[str], exclude_patterns: List[str] = None,
-                       max_size_mb: int = 0) -> Tuple[str, List[str], bool]:
+    @staticmethod
+    def _parallel_search_task(pattern: str, source_dirs: List[str], case_sensitive: bool, 
+                            use_regex: bool, exclude_patterns: List[str] = None,
+                            max_size_mb: int = 0) -> Tuple[str, List[str], bool, Set[str]]:
         """
-        Task function for parallel file finding.
+        Static task function for parallel file finding.
+        This avoids issues with pickling class methods in multiprocessing.
         
-        Args:
-            pattern: File pattern to search for
-            source_dirs: List of directories to search
-            exclude_patterns: List of patterns to exclude
-            max_size_mb: Maximum file size in MB (0 for no limit)
-            
         Returns:
-            Tuple (pattern, found_files, pattern_found)
+            Tuple (pattern, found_files, pattern_found, dirs_searched)
         """
         try:
-            found_files, pattern_found = self.find_file(pattern, source_dirs, exclude_patterns, max_size_mb)
-            return pattern, found_files, pattern_found
+            # Set up minimal logging for worker processes
+            worker_logger = logging.getLogger(f"worker-{os.getpid()}")
+            worker_logger.setLevel(logging.INFO)
+            
+            # Create local finder
+            finder = FileFinder(worker_logger, case_sensitive, use_regex)
+            
+            # Find files
+            found_files, pattern_found, dirs_searched = finder.find_file(
+                pattern, source_dirs, exclude_patterns, max_size_mb
+            )
+            
+            return pattern, found_files, pattern_found, dirs_searched
         except Exception as e:
-            self.logger.debug(f"Error in find_files_task for pattern {pattern}: {str(e)}")
-            return pattern, [], False
+            # Create a basic logger for error reporting
+            logging.error(f"Error in parallel search task for pattern {pattern}: {str(e)}")
+            logging.debug(traceback.format_exc())
+            return pattern, [], False, set()
     
     def find_file(self, pattern: str, source_dirs: List[str], exclude_patterns: List[str] = None, 
-                 max_size_mb: int = 0) -> Tuple[List[str], bool]:
+                 max_size_mb: int = 0) -> Tuple[List[str], bool, Set[str]]:
         """
         Find files matching a pattern across source directories.
         
@@ -417,10 +467,11 @@ class FileFinder:
             max_size_mb: Maximum file size in MB (0 for no limit)
             
         Returns:
-            Tuple (list of found files, pattern_found flag)
+            Tuple (list of found files, pattern_found flag, set of directories searched)
         """
         found_files = []
         pattern_found = False
+        dirs_searched = set()
         
         # Log the pattern being processed
         self.logger.log(f"Processing pattern: {pattern}", console=False)
@@ -430,7 +481,10 @@ class FileFinder:
             self.logger.log(f"  Searching in: {src_dir}", console=False)
             
             # Find matching files
-            matches = self._find_matches(pattern, src_dir)
+            matches, subdirs_searched = self._find_matches(pattern, src_dir)
+            
+            # Track directories searched
+            dirs_searched.update(subdirs_searched)
             
             if matches:
                 pattern_found = True
@@ -462,9 +516,9 @@ class FileFinder:
                     # Add file to found files
                     found_files.append(file_path)
         
-        return found_files, pattern_found
+        return found_files, pattern_found, dirs_searched
     
-    def _find_matches(self, pattern: str, src_dir: str) -> List[str]:
+    def _find_matches(self, pattern: str, src_dir: str) -> Tuple[List[str], Set[str]]:
         """
         Find files matching pattern in source directory using appropriate method.
         
@@ -472,8 +526,12 @@ class FileFinder:
         - Regex vs. glob patterns
         - Case sensitivity
         - EDL files with different cases or extensions
+        
+        Returns:
+            Tuple (list of matching files, set of directories searched)
         """
         matches = []
+        dirs_searched = set()
         
         self.logger.debug(f"Searching for '{pattern}' in {src_dir}")
         
@@ -481,11 +539,11 @@ class FileFinder:
             # Ensure the source directory exists and is readable
             if not os.path.isdir(src_dir):
                 self.logger.debug(f"Source directory does not exist: {src_dir}")
-                return matches
+                return matches, dirs_searched
                 
             if not os.access(src_dir, os.R_OK):
                 self.logger.debug(f"Source directory is not readable: {src_dir}")
-                return matches
+                return matches, dirs_searched
             
             # For EDL files with case-insensitive searches
             if not self.case_sensitive:
@@ -499,7 +557,10 @@ class FileFinder:
                 exact_matches = []
                 base_matches = []
                 
-                for root, _, files in os.walk(src_dir):
+                for root, dirs, files in os.walk(src_dir):
+                    # Track this directory
+                    dirs_searched.add(root)
+                    
                     for filename in files:
                         upper_filename = filename.upper()
                         
@@ -529,7 +590,11 @@ class FileFinder:
                         series_prefix = series_match.group(1).upper()
                         specific_matches = []
                         
-                        for root, _, files in os.walk(src_dir):
+                        for root, dirs, files in os.walk(src_dir):
+                            # Track this directory (again)
+                            # This is necessary for cases where we don't find matches in the first pass
+                            dirs_searched.add(root)
+                            
                             for filename in files:
                                 upper_filename = filename.upper()
                                 file_series = re.match(r'^([A-Za-z0-9]+)_', upper_filename)
@@ -549,7 +614,10 @@ class FileFinder:
                     # Regular expression matching
                     try:
                         regex = re.compile(pattern)
-                        for root, _, files in os.walk(src_dir):
+                        for root, dirs, files in os.walk(src_dir):
+                            # Track this directory
+                            dirs_searched.add(root)
+                            
                             for filename in files:
                                 if regex.search(filename):
                                     matches.append(os.path.join(root, filename))
@@ -557,7 +625,10 @@ class FileFinder:
                         self.logger.log(f"Warning: Invalid regex pattern: {pattern}", console=True)
                 else:
                     # Glob pattern matching
-                    for root, _, files in os.walk(src_dir):
+                    for root, dirs, files in os.walk(src_dir):
+                        # Track this directory
+                        dirs_searched.add(root)
+                        
                         for filename in files:
                             if fnmatch.fnmatch(filename, pattern):
                                 matches.append(os.path.join(root, filename))
@@ -577,8 +648,10 @@ class FileFinder:
         else:
             self.logger.debug(f"No files found matching '{pattern}'")
             self.logger.log(f"    No matches found for pattern: {pattern}", console=False)
-            
-        return matches
+        
+        self.logger.debug(f"Searched {len(dirs_searched)} directories under {src_dir}")
+        
+        return matches, dirs_searched
     
     def _should_exclude(self, file_path: str, exclude_patterns: List[str]) -> bool:
         """Check if a file should be excluded based on exclude patterns."""
@@ -898,6 +971,7 @@ class FileProcessor:
         self.excluded_files = 0
         self.total_bytes_copied = 0
         self.missing_patterns_list = []
+        self.total_dirs_searched = 0
     
     def run(self):
         """Run the file processing operation."""
@@ -925,6 +999,7 @@ class FileProcessor:
             # Process each pattern
             all_files_to_process = []
             all_files_to_copy = []
+            all_dirs_searched = set()
             
             # Show progress for pattern search if necessary
             if self.show_progress and self.total_patterns > 5:
@@ -951,9 +1026,16 @@ class FileProcessor:
                     if pattern in pattern_to_files:
                         found_files, pattern_found = pattern_to_files[pattern]
                         
+                        # Debug output
+                        self.logger.debug(f"Pattern {pattern}: Found {len(found_files)} files, pattern_found={pattern_found}")
+                        
                         # Process found files
                         self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
                                                all_files_to_copy)
+                
+                # Get total directories searched from the finder
+                all_dirs_searched = self.file_finder.dirs_searched_set
+                
             else:
                 # Process patterns sequentially
                 for i, pattern in enumerate(patterns):
@@ -962,13 +1044,20 @@ class FileProcessor:
                         progress.update(i + 1)
                     
                     # Find files matching the pattern
-                    found_files, pattern_found = self.file_finder.find_file(
+                    found_files, pattern_found, dirs_searched = self.file_finder.find_file(
                         pattern, self.source_dirs, exclude_patterns, self.max_size
                     )
+                    
+                    # Add to the total directories searched
+                    all_dirs_searched.update(dirs_searched)
                     
                     # Process found files
                     self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
                                            all_files_to_copy)
+            
+            # Store total directories searched
+            self.total_dirs_searched = len(all_dirs_searched)
+            self.logger.debug(f"Traversed a total of {self.total_dirs_searched} directories")
             
             # Finish progress display
             if progress:
@@ -1178,70 +1267,72 @@ class FileProcessor:
                 print("Starting copy operation...")
     
     def _log_summary(self, elapsed_time: float) -> None:
-        """Log summary statistics."""
-        # Calculate transfer speed
-        avg_speed = (self.total_bytes_copied / max(1, elapsed_time)) / (1024 * 1024) if elapsed_time > 0 else 0
-        
-        # Format time for display
-        time_str = self._format_time(elapsed_time)
-        
-        # Create summary text
-        summary = [
-            "",
-            "======================================================",
-            f"{'Dry Run ' if self.dry_run else ''}Summary - {datetime.datetime.now()}",
-            f"Source directories searched: {len(self.source_dirs)}",
-            f"Patterns processed: {self.total_patterns}",
-            f"Files found: {self.found_files}",
-            f"Files {'that would be ' if self.dry_run else ''}copied: {self.copied_files}",
-            f"Files {'that would be ' if self.dry_run else ''}skipped (already existed): {self.existing_files}",
-            f"Patterns with no matches: {self.missing_patterns}",
-            f"Files excluded by pattern: {self.excluded_files}",
-            f"Files excluded by size: {self.size_exceeded_files}",
-            f"Total data {'that would be ' if self.dry_run else ''}copied: {self.total_bytes_copied // (1024 * 1024)} MB",
-            f"Total elapsed time: {time_str}"
-        ]
-        
-        # Add speed information if applicable
-        if elapsed_time > 0 and self.total_bytes_copied > 0:
-            summary.append(f"Average Transfer Speed: {avg_speed:.2f} MB/s")
-        
-        # Add EDL file information if applicable
-        if self.edl_file:
-            summary.append(f"EDL file parsed: {self.edl_file}")
-        
-        summary.append("======================================================")
-        
-        # Log summary
-        for line in summary:
-            self.logger.log(line)
-        
-        # Output summary to console
-        print(f"{'Dry run completed' if self.dry_run else 'Operation completed'}. See {self.log_file} for details.")
-        print(f"Source directories searched: {len(self.source_dirs)}")
-        print(f"Patterns processed: {self.total_patterns}")
-        print(f"Files found: {self.found_files}")
-        print(f"Files {'that would be ' if self.dry_run else ''}copied: {self.copied_files}")
-        print(f"Files {'that would be ' if self.dry_run else ''}skipped (already existed): {self.existing_files}")
-        print(f"Patterns with no matches: {self.missing_patterns}")
-        
-        if self.excluded_files > 0:
-            print(f"Files excluded by pattern: {self.excluded_files}")
-        if self.size_exceeded_files > 0:
-            print(f"Files excluded by size: {self.size_exceeded_files}")
-        
-        print(f"Total data {'that would be ' if self.dry_run else ''}copied: {self.total_bytes_copied // (1024 * 1024)} MB")
-        print(f"Total elapsed time: {time_str}")
-        
-        if self.edl_file:
-            print(f"EDL file parsed: {self.edl_file}")
-        
-        # Display information about additional log files
-        if not self.dry_run:
-            if self.missing_patterns > 0:
-                print(f"Missing files log: {self.logger.missing_log} ({self.missing_patterns} patterns with no matches)")
-            if self.existing_files > 0:
-                print(f"Existing files log: {self.logger.existing_log} ({self.existing_files} files already in destination)")
+            """Log summary statistics."""
+            # Calculate transfer speed
+            avg_speed = (self.total_bytes_copied / max(1, elapsed_time)) / (1024 * 1024) if elapsed_time > 0 else 0
+            
+            # Format time for display
+            time_str = self._format_time(elapsed_time)
+            
+            # Create summary text
+            summary = [
+                "",
+                "======================================================",
+                f"{'Dry Run ' if self.dry_run else ''}Summary - {datetime.datetime.now()}",
+                f"Source directories specified: {len(self.source_dirs)}",
+                f"Total directories searched: {self.total_dirs_searched}",
+                f"Patterns processed: {self.total_patterns}",
+                f"Files found: {self.found_files}",
+                f"Files {'that would be ' if self.dry_run else ''}copied: {self.copied_files}",
+                f"Files {'that would be ' if self.dry_run else ''}skipped (already existed): {self.existing_files}",
+                f"Patterns with no matches: {self.missing_patterns}",
+                f"Files excluded by pattern: {self.excluded_files}",
+                f"Files excluded by size: {self.size_exceeded_files}",
+                f"Total data {'that would be ' if self.dry_run else ''}copied: {self.total_bytes_copied // (1024 * 1024)} MB",
+                f"Total elapsed time: {time_str}"
+            ]
+            
+            # Add speed information if applicable
+            if elapsed_time > 0 and self.total_bytes_copied > 0:
+                summary.append(f"Average Transfer Speed: {avg_speed:.2f} MB/s")
+            
+            # Add EDL file information if applicable
+            if self.edl_file:
+                summary.append(f"EDL file parsed: {self.edl_file}")
+            
+            summary.append("======================================================")
+            
+            # Log summary
+            for line in summary:
+                self.logger.log(line)
+            
+            # Output summary to console
+            print(f"{'Dry run completed' if self.dry_run else 'Operation completed'}. See {self.log_file} for details.")
+            print(f"Source directories specified: {len(self.source_dirs)}")
+            print(f"Total directories searched: {self.total_dirs_searched}")
+            print(f"Patterns processed: {self.total_patterns}")
+            print(f"Files found: {self.found_files}")
+            print(f"Files {'that would be ' if self.dry_run else ''}copied: {self.copied_files}")
+            print(f"Files {'that would be ' if self.dry_run else ''}skipped (already existed): {self.existing_files}")
+            print(f"Patterns with no matches: {self.missing_patterns}")
+            
+            if self.excluded_files > 0:
+                print(f"Files excluded by pattern: {self.excluded_files}")
+            if self.size_exceeded_files > 0:
+                print(f"Files excluded by size: {self.size_exceeded_files}")
+            
+            print(f"Total data {'that would be ' if self.dry_run else ''}copied: {self.total_bytes_copied // (1024 * 1024)} MB")
+            print(f"Total elapsed time: {time_str}")
+            
+            if self.edl_file:
+                print(f"EDL file parsed: {self.edl_file}")
+            
+            # Display information about additional log files
+            if not self.dry_run:
+                if self.missing_patterns > 0:
+                    print(f"Missing files log: {self.logger.missing_log} ({self.missing_patterns} patterns with no matches)")
+                if self.existing_files > 0:
+                    print(f"Existing files log: {self.logger.existing_log} ({self.existing_files} files already in destination)")
     
     def _format_time(self, seconds: float) -> str:
         """Format seconds into a human-readable time string."""
