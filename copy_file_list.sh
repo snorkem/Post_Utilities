@@ -22,7 +22,7 @@
 
 # Display usage information with examples
 usage() {
-    SCRIPT_NAME=$(basename "$0")
+    SCRIPT_NAME="copy_file_list.sh"
     cat << EOF
 Usage: ${SCRIPT_NAME} -s SOURCE_DIR1[,SOURCE_DIR2,...] -d DEST_DIR (-f FILE_LIST | --edl EDL_FILE) -l LOG_FILE [OPTIONS]
 
@@ -160,6 +160,27 @@ check_disk_space() {
         return 1
     fi
     return 0
+}
+
+TRANSFER_START_TIME=0
+TOTAL_BYTES_TRANSFERRED=0
+
+# Function to calculate and format transfer speed
+calculate_transfer_speed() {
+    local current_bytes="$1"
+    local start_time="$2"
+    local current_time=$(date +%s)
+    local elapsed_time=$((current_time - start_time))
+    
+    # Avoid division by zero
+    if [[ $elapsed_time -eq 0 ]]; then
+        elapsed_time=1
+    fi
+    
+    # Calculate speed in MB/s
+    local speed=$(awk "BEGIN {printf \"%.2f\", $current_bytes / $elapsed_time / 1024 / 1024}")
+    
+    echo "$speed"
 }
 
 # Function to display progress
@@ -739,11 +760,25 @@ for file in "${all_files_to_process[@]}"; do
         file_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
         
         if [[ $DRY_RUN -eq 0 ]]; then
+            # Start transfer timer if not already started
+            if [[ $TRANSFER_START_TIME -eq 0 ]]; then
+                TRANSFER_START_TIME=$(date +%s)
+            fi
+            
             # Actual copy operation
             if cp "$file" "$DEST_DIR/"; then
                 echo "  Copied to: $DEST_DIR/$filename" >> "$LOG_FILE"
                 ((copied_files++))
                 ((total_bytes_copied += file_size))
+                
+                # Update total bytes transferred
+                TOTAL_BYTES_TRANSFERRED=$((TOTAL_BYTES_TRANSFERRED + file_size))
+                
+                # Calculate and display transfer speed periodically
+                if [[ $((copied_files % 10)) -eq 0 ]]; then
+                    current_speed=$(calculate_transfer_speed "$TOTAL_BYTES_TRANSFERRED" "$TRANSFER_START_TIME")
+                    printf "\rTransfer Speed: %.2f MB/s" "$current_speed"
+                fi
             else
                 echo "  ERROR: Failed to copy: $file" >> "$LOG_FILE"
             fi
@@ -753,6 +788,7 @@ for file in "${all_files_to_process[@]}"; do
             ((copied_files++))
             ((total_bytes_copied += file_size))
         fi
+        printf "\n"
     }
     fi
     
@@ -782,6 +818,16 @@ if [[ $DRY_RUN -eq 0 ]]; then
         echo "Files excluded by pattern: $excluded_files" >> "$LOG_FILE"
         echo "Files excluded by size: $size_exceeded_files" >> "$LOG_FILE"
         echo "Total data copied: $((total_bytes_copied / 1024 / 1024)) MB" >> "$LOG_FILE"
+        if [[ $TRANSFER_START_TIME -gt 0 ]]; then
+            total_transfer_time=$(($(date +%s) - TRANSFER_START_TIME))
+            if [[ $total_transfer_time -eq 0 ]]; then
+                total_transfer_time=1
+            fi
+            avg_speed=$(awk "BEGIN {printf \"%.2f\", $total_bytes_copied / $total_transfer_time / 1024 / 1024}")
+            
+            echo "Average Transfer Speed: $avg_speed MB/s" >> "$LOG_FILE"
+            echo "Average Transfer Speed: $avg_speed MB/s"
+        fi
         if [[ -n "$EDL_FILE" ]]; then
             echo "EDL file parsed: $EDL_FILE" >> "$LOG_FILE"
         fi
@@ -801,6 +847,16 @@ else {
     echo "Files excluded by pattern: $excluded_files" >> "$DRY_RUN_LOG"
     echo "Files excluded by size: $size_exceeded_files" >> "$DRY_RUN_LOG"
     echo "Total data that would be copied: $((total_bytes_copied / 1024 / 1024)) MB" >> "$DRY_RUN_LOG"
+    if [[ $TRANSFER_START_TIME -gt 0 ]]; then
+        total_transfer_time=$(($(date +%s) - TRANSFER_START_TIME))
+        if [[ $total_transfer_time -eq 0 ]]; then
+            total_transfer_time=1
+        fi
+        avg_speed=$(awk "BEGIN {printf \"%.2f\", $total_bytes_copied / $total_transfer_time / 1024 / 1024}")
+        
+        echo "Average Transfer Speed: $avg_speed MB/s" >> "$LOG_FILE"
+        echo "Average Transfer Speed: $avg_speed MB/s"
+    fi
     if [[ -n "$EDL_FILE" ]]; then
         echo "EDL file parsed: $EDL_FILE" >> "$DRY_RUN_LOG"
     fi
