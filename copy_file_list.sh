@@ -17,12 +17,14 @@
 # - Check available disk space before starting
 # - Support advanced pattern matching including regex
 # - Support dry run mode to preview what would be copied
+# - Use case-insensitive search when processing EDL files
 # ================================================
 
 # Display usage information with examples
 usage() {
+    SCRIPT_NAME=$(basename "$0")
     cat << EOF
-Usage: $0 -s SOURCE_DIR1[,SOURCE_DIR2,...] -d DEST_DIR (-f FILE_LIST | --edl EDL_FILE) -l LOG_FILE [OPTIONS]
+Usage: ${SCRIPT_NAME} -s SOURCE_DIR1[,SOURCE_DIR2,...] -d DEST_DIR (-f FILE_LIST | --edl EDL_FILE) -l LOG_FILE [OPTIONS]
 
 Required Options:
   -s SOURCE_DIRS  One or more directories to search in (comma-separated)
@@ -31,70 +33,116 @@ Required Options:
 
 File List Options (must use one of these):
   -f FILE_LIST    File containing list of filenames to search for (one per line)
-  --edl EDL_FILE  Parse an EDL file to extract source filenames
+  --edl EDL_FILE  Parse an EDL file to extract source filenames (uses case-insensitive search)
 
 Additional Options:
   -p              Show progress during copy operations
   -r              Use regular expressions instead of glob patterns
   -m MAX_SIZE     Skip files larger than MAX_SIZE (in MB)
-  -x              Skip files that match patterns in FILE_LIST
+  -x EXCLUDE_FILE Skip files that match patterns in EXCLUDE_FILE
   -n              Perform a dry run (no actual file copying)
   -h              Display this help message
 
 Advanced Pattern Matching:
   By default, the script uses glob patterns (*, ?, [abc], etc.).
   When -r is specified, patterns are treated as regular expressions.
+  When --edl is used, search is automatically case-insensitive to handle uppercase EDL filenames.
 
 Examples:
   # Using a simple file list:
-  $0 -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt
+  ${SCRIPT_NAME} -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt
 
   # Parsing an EDL file to extract source filenames:
-  $0 -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt
+  ${SCRIPT_NAME} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt
 
   # Perform a dry run with an EDL file:
-  $0 -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt -n
+  ${SCRIPT_NAME} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt -n
   
   # Using glob patterns (default):
-  echo "*.jpg" > files.txt       # Match all JPG files
-  echo "doc_*.pdf" >> files.txt  # Match PDFs starting with "doc_"
-  echo "file_[0-9].txt" >> files.txt  # Match file_0.txt through file_9.txt
+  # First create a file list:
+  #   echo "*.jpg" > files.txt       # Match all JPG files
+  #   echo "doc_*.pdf" >> files.txt  # Match PDFs starting with "doc_"
+  #   echo "file_[0-9].txt" >> files.txt  # Match file_0.txt through file_9.txt
+  # Then run:
+  ${SCRIPT_NAME} -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt
 
   # Using regular expressions (with -r flag):
-  echo "^.*\\.jpg$" > regex.txt         # Match all JPG files
-  echo "^doc_.*\\.pdf$" >> regex.txt    # Match PDFs starting with "doc_"
-  echo "^file_[0-9]\\.txt$" >> regex.txt  # Match file_0.txt through file_9.txt
-  echo "^(report|summary)_.*$" >> regex.txt  # Match files starting with "report_" or "summary_"
+  # First create a file with regex patterns:
+  #   echo "^.*\\.jpg$" > regex.txt         # Match all JPG files
+  #   echo "^doc_.*\\.pdf$" >> regex.txt    # Match PDFs starting with "doc_"
+  #   echo "^file_[0-9]\\.txt$" >> regex.txt  # Match file_0.txt through file_9.txt
+  #   echo "^(report|summary)_.*$" >> regex.txt  # Match files starting with "report_" or "summary_"
+  # Then run:
+  ${SCRIPT_NAME} -s /path/source1,/path/source2 -d /path/dest -f regex.txt -l log.txt -r
 
   # Exclude patterns (with -x flag):
-  echo "*.tmp" > exclude.txt  # Exclude all .tmp files
-  $0 -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt -x exclude.txt
+  # First create an exclude list:
+  #   echo "*.tmp" > exclude.txt  # Exclude all .tmp files
+  # Then run:
+  ${SCRIPT_NAME} -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt -x exclude.txt
 EOF
     exit 1
 }
 
-# Function to parse an EDL file and extract unique source filenames
+# Progress bar function for EDL parsing
+show_edl_parse_progress() {
+    local current_line="$1"
+    local total_lines="$2"
+    local width=50
+    
+    # Calculate percentage
+    local percent=$((current_line * 100 / total_lines))
+    local completed=$((width * current_line / total_lines))
+    
+    # Clear the current line and print progress bar
+    printf "\r[EDL Parsing Progress] ["
+    printf "%${completed}s" | tr ' ' '#'
+    printf "%$((width - completed))s" | tr ' ' ' '
+    printf "] %3d%% (%d/%d lines)" "$percent" "$current_line" "$total_lines"
+    
+    # Ensure the progress bar is fully printed on completion
+    if [[ $current_line -eq $total_lines ]]; then
+        printf "\n"
+    fi
+}
+
+# Modify parse_edl_file to include progress tracking
 parse_edl_file() {
     local edl_file="$1"
     local output_file="$2"
     
     echo "Parsing EDL file: $edl_file"
     
-    # Create a temporary file to store the filenames
-    local temp_file=$(mktemp)
+    # Count total lines in the EDL file
+    local total_lines=$(grep -c "*SOURCE FILE:" "$edl_file")
+    echo "Total SOURCE FILE lines: $total_lines"
     
-    # Extract all SOURCE FILE: lines, get just the filename
-    grep "SOURCE FILE:" "$edl_file" | sed 's/.*SOURCE FILE: *//' > "$temp_file"
+    # Create a temporary file to track progress
+    local temp_output=$(mktemp)
     
-    # Get unique filenames and write to the output file
-    sort -u "$temp_file" > "$output_file"
+    # Counter for progress
+    local current_line=0
     
-    # Count how many unique files were found
+    # Process SOURCE FILE lines with progress tracking
+    while IFS= read -r line; do
+        # Extract filename and add to output
+        echo "$line" | sed 's/\*SOURCE FILE: *//' >> "$temp_output"
+        
+        # Increment line counter
+        ((current_line++))
+        
+        # Show progress
+        show_edl_parse_progress "$current_line" "$total_lines"
+    done < <(grep "*SOURCE FILE:" "$edl_file")
+    
+    # Sort and remove duplicates
+    sort -u "$temp_output" > "$output_file"
+    
+    # Remove temporary file
+    rm "$temp_output"
+    
     local file_count=$(wc -l < "$output_file")
     echo "Found $file_count unique source files in EDL"
-    
-    # Cleanup
-    rm "$temp_file"
 }
 
 # Function to check available disk space
@@ -128,6 +176,25 @@ display_progress() {
     printf "] %3d%% (%d/%d files)" "$percent" "$current" "$total"
 }
 
+# New progress bar function for pattern searching
+show_pattern_search_progress() {
+    local current_pattern="$1"
+    local total_patterns="$2"
+    local current_pattern_name="$3"
+    local width=50
+    
+    # Calculate percentage
+    local percent=$((current_pattern * 100 / total_patterns))
+    local completed=$((width * current_pattern / total_patterns))
+    
+    # Use \r to return to start of line and overwrite
+    printf "\r[Pattern Search Progress] ["
+    printf "%${completed}s" | tr ' ' '#'
+    printf "%$((width - completed))s" | tr ' ' ' '
+    printf "] %3d%% (%d/%d patterns)" "$percent" "$current_pattern" "$total_patterns"
+
+}
+
 # Function to calculate total size of files
 calculate_total_size() {
     local file_list=("$@")
@@ -154,6 +221,8 @@ USE_REGEX=0
 MAX_SIZE=0  # No limit by default
 EXCLUDE_FILE=""
 DRY_RUN=0   # Actual copy by default
+CASE_SENSITIVE=1 # Default to case-sensitive matching
+EDL_GLOB_MODE=1 # Default to enhanced glob pattern for EDL (*.* wildcard)
 
 # Process command line arguments
 while [[ $# -gt 0 ]]; do
@@ -172,6 +241,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --edl)
             EDL_FILE="$2"
+            CASE_SENSITIVE=0 # EDL files typically have uppercase filenames, use case-insensitive search
             shift 2
             ;;
         -l)
@@ -352,6 +422,11 @@ if [[ $DRY_RUN -eq 0 ]]; then
     echo "Source Directories: ${SOURCE_DIRS[*]}" >> "$LOG_FILE"
     echo "Destination Directory: $DEST_DIR" >> "$LOG_FILE"
     echo "File List: $FILE_LIST" >> "$LOG_FILE"
+    if [[ -n "$EDL_FILE" ]]; then
+        echo "EDL File: $EDL_FILE" >> "$LOG_FILE"
+        echo "Using case-insensitive file matching" >> "$LOG_FILE"
+        echo "Using enhanced glob patterns with *.* wildcard" >> "$LOG_FILE"
+    fi
     if [[ $USE_REGEX -eq 1 ]]; then
         echo "Using regular expressions for pattern matching" >> "$LOG_FILE"
     fi
@@ -372,6 +447,11 @@ else
     echo "Source Directories: ${SOURCE_DIRS[*]}" >> "$DRY_RUN_LOG"
     echo "Destination Directory: $DEST_DIR" >> "$DRY_RUN_LOG"
     echo "File List: $FILE_LIST" >> "$DRY_RUN_LOG"
+    if [[ -n "$EDL_FILE" ]]; then
+        echo "EDL File: $EDL_FILE" >> "$DRY_RUN_LOG"
+        echo "Using case-insensitive file matching" >> "$DRY_RUN_LOG"
+        echo "Using enhanced glob patterns with *.* wildcard" >> "$DRY_RUN_LOG"
+    fi
     if [[ $USE_REGEX -eq 1 ]]; then
         echo "Using regular expressions for pattern matching" >> "$DRY_RUN_LOG"
     fi
@@ -407,6 +487,7 @@ if [[ ! -r "$FILE_LIST" ]]; then
     echo "Error: File list is not readable: $FILE_LIST"
     exit 1
 fi
+
 
 # Load exclude patterns if specified
 exclude_patterns=()
@@ -458,8 +539,17 @@ while IFS= read -r file_pattern || [[ -n "$file_pattern" ]]; do
     ((total_patterns++))
 done < "$FILE_LIST"
 
+current_pattern=0
+total_patterns=${#file_patterns[@]}
+
 # For each pattern, search across all source directories
 for file_pattern in "${file_patterns[@]}"; do
+    # Increment pattern counter
+    ((current_pattern++))
+    
+    # Show progress for current pattern
+    show_pattern_search_progress "$current_pattern" "$total_patterns" "$file_pattern"
+
     if [[ $DRY_RUN -eq 0 ]]; then
         echo "Processing pattern: $file_pattern" >> "$LOG_FILE"
     else
@@ -477,13 +567,23 @@ for file_pattern in "${file_patterns[@]}"; do
             echo "  Searching in: $src_dir" >> "$DRY_RUN_LOG"
         fi
         
-        # Use find with regex or glob pattern
+        # Use find with regex or glob pattern and adjust case sensitivity
         if [[ $USE_REGEX -eq 1 ]]; then
             # Use regex pattern with -regex option to find
-            found=$(find "$src_dir" -type f -regex "$src_dir/$file_pattern" 2>/dev/null)
-        else
+            if [[ $CASE_SENSITIVE -eq 1 ]]; then
+                found=$(find "$src_dir" -type f -regex "$src_dir/$file_pattern" 2>/dev/null)
+            else
+                found=$(find "$src_dir" -type f -iregex "$src_dir/$file_pattern" 2>/dev/null)
+            fi
+        else {
             # Use standard glob pattern
-            found=$(find "$src_dir" -type f -name "$file_pattern" 2>/dev/null)
+            if [[ $CASE_SENSITIVE -eq 1 ]]; then
+                found=$(find "$src_dir" -type f -name "$file_pattern" 2>/dev/null)
+            else {
+                found=$(find "$src_dir" -type f -iname "$file_pattern*" 2>/dev/null)
+            }
+            fi
+        }
         fi
         
         # Process found files
