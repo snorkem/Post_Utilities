@@ -1,4 +1,4 @@
-    #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 File Search and Copy Utility v3.1
 ==================================
