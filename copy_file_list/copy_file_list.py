@@ -1282,8 +1282,8 @@ class FileProcessor:
                 f"Source directories specified: {len(self.source_dirs)}",
                 f"Total directories searched: {self.total_dirs_searched}",
                 f"Patterns processed: {self.total_patterns}",
-                f"Files found: {self.found_files}",
-                f"Files {'that would be ' if self.dry_run else ''}copied: {self.copied_files}",
+                f"Files found (not accurate yet): {self.found_files}",
+                f"Files {'that would be ' if self.dry_run else ''}copied (not accurate yet): {self.copied_files}",
                 f"Files {'that would be ' if self.dry_run else ''}skipped (already existed): {self.existing_files}",
                 f"Patterns with no matches: {self.missing_patterns}",
                 f"Files excluded by pattern: {self.excluded_files}",
@@ -1311,9 +1311,9 @@ class FileProcessor:
             print(f"Source directories specified: {len(self.source_dirs)}")
             print(f"Total directories searched: {self.total_dirs_searched}")
             print(f"Patterns processed: {self.total_patterns}")
-            print(f"Files found: {self.found_files}")
-            print(f"Files {'that would be ' if self.dry_run else ''}copied: {self.copied_files}")
-            print(f"Files {'that would be ' if self.dry_run else ''}skipped (already existed): {self.existing_files}")
+            print(f"Files found (not accurate yet): {self.found_files}")
+            print(f"Files {'that would be ' if self.dry_run else ''}copied (not accurate yet): {self.copied_files}")
+            print(f"Files {'that would be ' if self.dry_run else ''}skipped (already existed -- not accurate yet): {self.existing_files}")
             print(f"Patterns with no matches: {self.missing_patterns}")
             
             if self.excluded_files > 0:
