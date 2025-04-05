@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Standalone EDL Parser that finds entries with the same name and combines them into one entry:
-- Source In from the first occurrence
-- Source Out from the last occurrence
-- Sequence In from the first occurrence
-- Sequence Out from the last occurrence
+Standalone EDL Parser that identifies clips with the same name:
+- Treats clips with gaps > 1 frame as separate instances
+- For each instance, takes Source In from first occurrence and Source Out from last occurrence
+- For each instance, takes Sequence In from first occurrence and Sequence Out from last occurrence
 
 No external libraries required.
 Supports output in TXT, CSV, and Excel formats (Excel requires pandas).
@@ -132,7 +131,7 @@ def parse_edl_file(edl_file_path):
         edl_file_path (str): Path to the EDL file
         
     Returns:
-        dict: Dictionary with combined clip information
+        dict: Dictionary with combined clip information, treating gaps as separate instances
     """
     # Check if file exists
     if not os.path.exists(edl_file_path):
@@ -196,7 +195,7 @@ def parse_edl_file(edl_file_path):
         # Add edit to the appropriate group
         clips[clip_id].append(edit)
     
-    # Process clips to create combined entries
+    # Process clips to identify instances with gaps
     result = {}
     
     for clip_id, clip_edits in clips.items():
@@ -204,17 +203,43 @@ def parse_edl_file(edl_file_path):
             # Sort edits by record in timecode
             sorted_edits = sorted(clip_edits, key=lambda x: parse_timecode(x.record_in))
             
-            # Get first and last occurrences
-            first_edit = sorted_edits[0]
-            last_edit = sorted_edits[-1]
+            # Initialize list to store instances with gaps
+            instances = []
+            current_instance = [sorted_edits[0]]
             
-            # Create combined entry
-            result[clip_id] = {
-                'source_in': fix_timecode(first_edit.source_in),
-                'source_out': fix_timecode(last_edit.source_out),
-                'sequence_in': fix_timecode(first_edit.record_in),
-                'sequence_out': fix_timecode(last_edit.record_out)
-            }
+            # Check for gaps between consecutive edits
+            for i in range(1, len(sorted_edits)):
+                current_edit = sorted_edits[i]
+                previous_edit = sorted_edits[i-1]
+                
+                # Calculate the gap between current edit's record in and previous edit's record out
+                current_start = parse_timecode(current_edit.record_in)
+                previous_end = parse_timecode(previous_edit.record_out)
+                
+                gap = current_start - previous_end
+                
+                if gap > 1:  # If gap is more than 1 frame
+                    # Finish current instance
+                    instances.append(current_instance)
+                    # Start new instance
+                    current_instance = [current_edit]
+                else:
+                    # Add to current instance
+                    current_instance.append(current_edit)
+            
+            # Add the last instance
+            if current_instance:
+                instances.append(current_instance)
+            
+            # Create entries for each instance
+            for idx, instance in enumerate(instances):
+                instance_id = f"{clip_id} (Instance {idx+1})" if len(instances) > 1 else clip_id
+                result[instance_id] = {
+                    'source_in': fix_timecode(instance[0].source_in),
+                    'source_out': fix_timecode(instance[-1].source_out),
+                    'sequence_in': fix_timecode(instance[0].record_in),
+                    'sequence_out': fix_timecode(instance[-1].record_out)
+                }
     
     return result
 
@@ -575,6 +600,8 @@ def main():
                         help='Output format (default: txt)')
     parser.add_argument('--analytics', action='store_true',
                         help='Generate analytics report')
+    parser.add_argument('--no-overwrite', action='store_true',
+                        help='Do not overwrite existing output files')
     
     args = parser.parse_args()
     
@@ -596,6 +623,12 @@ def main():
         if format_type == 'txt':
             output = format_edl_output(clips, 'txt')
             output_file = f"{base_path}_parsed.txt"
+            
+            # Check if file exists and skip if not overwriting
+            if args.no_overwrite and os.path.exists(output_file):
+                print(f"File {output_file} already exists. Skipping (use without --no-overwrite to overwrite).")
+                continue
+                
             with open(output_file, 'w') as f:
                 f.write(output)
             print(f"Text output saved to: {output_file}")
@@ -606,32 +639,57 @@ def main():
             
         elif format_type == 'csv':
             output_file = f"{base_path}_parsed.csv"
+            
+            # Check if file exists and skip if not overwriting
+            if args.no_overwrite and os.path.exists(output_file):
+                print(f"File {output_file} already exists. Skipping (use without --no-overwrite to overwrite).")
+                continue
+                
             save_csv(data, output_file)
             csv_file_path = output_file
             
         elif format_type == 'excel':
             output_file = f"{base_path}_parsed.xlsx"
+            
+            # Check if file exists and skip if not overwriting
+            if args.no_overwrite and os.path.exists(output_file):
+                print(f"File {output_file} already exists. Skipping (use without --no-overwrite to overwrite).")
+                continue
+                
             save_excel(data, output_file)
     
     # If CSV wasn't explicitly requested but is needed for analytics, create it
     if args.analytics and csv_file_path is None and 'csv' not in output_formats:
         csv_file_path = f"{base_path}_parsed.csv"
-        save_csv(data, csv_file_path)
+        
+        # Only create if we're overwriting or file doesn't exist
+        if not args.no_overwrite or not os.path.exists(csv_file_path):
+            save_csv(data, csv_file_path)
     
     # Generate analytics if requested
-    if args.analytics and csv_file_path:
+    if args.analytics and csv_file_path and os.path.exists(csv_file_path):
         print("\nGenerating analytics reports...")
         stats = analyze_clips(csv_file_path)
         
         if stats:
             # Generate text report
             txt_analytics_file = f"{base_path}_analytics.txt"
-            generate_analytics_report(stats, txt_analytics_file)
+            
+            # Check if file exists and skip if not overwriting
+            if not args.no_overwrite or not os.path.exists(txt_analytics_file):
+                generate_analytics_report(stats, txt_analytics_file)
+            else:
+                print(f"File {txt_analytics_file} already exists. Skipping (use without --no-overwrite to overwrite).")
             
             # Generate Excel report if pandas is available
             if PANDAS_AVAILABLE:
                 excel_analytics_file = f"{base_path}_analytics.xlsx"
-                generate_excel_analytics(stats, excel_analytics_file)
+                
+                # Check if file exists and skip if not overwriting
+                if not args.no_overwrite or not os.path.exists(excel_analytics_file):
+                    generate_excel_analytics(stats, excel_analytics_file)
+                else:
+                    print(f"File {excel_analytics_file} already exists. Skipping (use without --no-overwrite to overwrite).")
             else:
                 print("Pandas not available. Excel analytics report will not be generated.")
                 print("Install pandas with: pip install pandas openpyxl")
