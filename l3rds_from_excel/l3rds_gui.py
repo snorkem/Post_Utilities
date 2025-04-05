@@ -561,7 +561,7 @@ if __name__ == "__main__":
         from PIL import Image
     except ImportError as e:
         print(f"Error: Missing required dependency: {e}")
-        print("Please install required packages: pip install pandas pillow")
+        print(f"Please install required packages: pip install pandas pillow and {e}")
         sys.exit(1)
         
     app = QApplication(sys.argv)
