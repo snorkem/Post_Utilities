@@ -32,6 +32,7 @@ import traceback
 import tempfile
 import multiprocessing
 from multiprocessing import Pool
+import xxhash
 
 
 # Set up signal handlers for graceful termination
@@ -530,7 +531,7 @@ class FileFinder:
         Returns:
             Tuple (list of matching files, set of directories searched)
         """
-        matches = []
+        matches = []  # Use a list to maintain order of discovery
         dirs_searched = set()
         
         self.logger.debug(f"Searching for '{pattern}' in {src_dir}")
@@ -553,60 +554,75 @@ class FileFinder:
                 # Extract base name if pattern has extension
                 base_pattern = os.path.splitext(upper_pattern)[0] if '.' in pattern else upper_pattern
                 
-                # First pass: Look for exact matches (ignoring case)
-                exact_matches = []
-                base_matches = []
+                # Normalize the pattern by removing version and timestamp info
+                def normalize_filename(filename):
+                    # Remove version and timestamp info
+                    norm = re.sub(r'_V\d+\.\d+', '', filename)
+                    norm = re.sub(r'_TC\d+', '', norm)
+                    return norm.upper()
                 
+                normalized_pattern = normalize_filename(pattern)
+                
+                # Flag to stop searching after finding a match
+                match_found = False
+                
+                # First pass: Look for exact matches
                 for root, dirs, files in os.walk(src_dir):
+                    if match_found:
+                        break
+                    
                     # Track this directory
                     dirs_searched.add(root)
                     
                     for filename in files:
-                        upper_filename = filename.upper()
+                        full_path = os.path.join(root, filename)
                         
-                        # Track exact matches
-                        if upper_pattern == upper_filename:
-                            exact_matches.append(os.path.join(root, filename))
-                            
-                        # Track base name matches
-                        elif '.' in filename and base_pattern == os.path.splitext(upper_filename)[0]:
-                            base_matches.append(os.path.join(root, filename))
+                        # Exact match (case-insensitive)
+                        if filename.upper() == pattern.upper():
+                            matches = [full_path]
+                            match_found = True
+                            break
+                        
+                        # Normalized match
+                        normalized_filename = normalize_filename(filename)
+                        if normalized_filename == normalized_pattern:
+                            matches = [full_path]
+                            match_found = True
+                            break
+                    
+                    if match_found:
+                        break
                 
-                # 1. Prefer exact matches if available
-                if exact_matches:
-                    self.logger.debug(f"Found {len(exact_matches)} exact case-insensitive matches for '{pattern}'")
-                    matches.extend(exact_matches)
-                
-                # 2. Otherwise use base name matches if available
-                elif base_matches:
-                    self.logger.debug(f"Found {len(base_matches)} base name matches for '{pattern}'")
-                    matches.extend(base_matches)
-                
-                # 3. Last attempt: Try project/series based matching
+                # If no match found, try series-based matching
                 if not matches:
                     # Extract series/project code (e.g., EHDT104 from EHDT104_M01_...)
                     series_match = re.match(r'^([A-Za-z0-9]+)_', pattern)
                     if series_match:
                         series_prefix = series_match.group(1).upper()
-                        specific_matches = []
                         
                         for root, dirs, files in os.walk(src_dir):
-                            # Track this directory (again)
-                            # This is necessary for cases where we don't find matches in the first pass
+                            if match_found:
+                                break
+                            
+                            # Track this directory
                             dirs_searched.add(root)
                             
                             for filename in files:
+                                full_path = os.path.join(root, filename)
                                 upper_filename = filename.upper()
                                 file_series = re.match(r'^([A-Za-z0-9]+)_', upper_filename)
                                 
-                                # Check if file is from same series and contains similar identifiers
-                                if (file_series and file_series.group(1).upper() == series_prefix and
-                                    self._similarity_score(upper_pattern, upper_filename) > 0.7):
-                                    specific_matches.append(os.path.join(root, filename))
-                        
-                        if specific_matches:
-                            self.logger.debug(f"Found {len(specific_matches)} series-based matches for '{pattern}'")
-                            matches.extend(specific_matches)
+                                # Check if file is from same series
+                                if (file_series and file_series.group(1).upper() == series_prefix):
+                                    # Very strict similarity check
+                                    normalized_filename = normalize_filename(filename)
+                                    if normalized_filename == normalized_pattern:
+                                        matches = [full_path]
+                                        match_found = True
+                                        break
+                            
+                            if match_found:
+                                break
             
             # For case-sensitive or regex searches
             else:
@@ -619,8 +635,13 @@ class FileFinder:
                             dirs_searched.add(root)
                             
                             for filename in files:
+                                full_path = os.path.join(root, filename)
                                 if regex.search(filename):
-                                    matches.append(os.path.join(root, filename))
+                                    matches = [full_path]
+                                    break
+                            
+                            if matches:
+                                break
                     except re.error:
                         self.logger.log(f"Warning: Invalid regex pattern: {pattern}", console=True)
                 else:
@@ -630,27 +651,28 @@ class FileFinder:
                         dirs_searched.add(root)
                         
                         for filename in files:
+                            full_path = os.path.join(root, filename)
                             if fnmatch.fnmatch(filename, pattern):
-                                matches.append(os.path.join(root, filename))
-        
+                                matches = [full_path]
+                                break
+                        
+                        if matches:
+                            break
+            
+            # Log results
+            if matches:
+                self.logger.debug(f"Found {len(matches)} files matching '{pattern}'")
+                self.logger.log(f"    Found {len(matches)} files matching pattern: {pattern}", console=False)
+                for i, match in enumerate(matches[:3]):  # Log first 3 matches
+                    self.logger.log(f"      Match {i+1}: {os.path.basename(match)}", console=False)
+            else:
+                self.logger.debug(f"No files found matching '{pattern}'")
+                self.logger.log(f"    No matches found for pattern: {pattern}", console=False)
+            
+            self.logger.debug(f"Searched {len(dirs_searched)} directories under {src_dir}")
         except Exception as e:
-            self.logger.debug(f"Error searching for '{pattern}' in {src_dir}: {str(e)}")
-            self.logger.debug(traceback.format_exc())
-        
-        # Log what we found (or didn't find)
-        if matches:
-            self.logger.debug(f"Found {len(matches)} files matching '{pattern}'")
-            self.logger.log(f"    Found {len(matches)} files matching pattern: {pattern}", console=False)
-            for i, match in enumerate(matches[:3]):  # Log first 3 matches
-                self.logger.log(f"      Match {i+1}: {os.path.basename(match)}", console=False)
-            if len(matches) > 3:
-                self.logger.log(f"      ... and {len(matches) - 3} more", console=False)
-        else:
-            self.logger.debug(f"No files found matching '{pattern}'")
-            self.logger.log(f"    No matches found for pattern: {pattern}", console=False)
-        
-        self.logger.debug(f"Searched {len(dirs_searched)} directories under {src_dir}")
-        
+            print(f"Error somwhere here: {e}")
+            
         return matches, dirs_searched
     
     def _should_exclude(self, file_path: str, exclude_patterns: List[str]) -> bool:
@@ -838,34 +860,87 @@ class FileCopier:
             dest_size = os.path.getsize(dest_path)
             
             if src_size != dest_size:
-                self.logger.debug(f"Size mismatch: {src_path} ({src_size} bytes) -> {dest_path} ({dest_size} bytes)")
+                error_msg = f"File size mismatch: {src_path} ({src_size} bytes) -> {dest_path} ({dest_size} bytes)"
+                self.logger.log(f"  VERIFY ERROR: {error_msg}")
                 return False
             
-            # For small files, compute and compare MD5 hashes
-            if src_size < 100 * 1024 * 1024:  # Only hash files smaller than 100MB
+            # Determine hash strategy based on file size
+            if src_size > 1 * 1024 * 1024 * 1024:  # Files larger than 1GB
+                # For very large files, use a sample-based hash to reduce computation time
+                src_hash = self._calculate_sample_hash(src_path)
+                dest_hash = self._calculate_sample_hash(dest_path)
+                hash_type = "sampled hash"
+            else:
+                # For smaller files, calculate full hash
                 src_hash = self._calculate_file_hash(src_path)
                 dest_hash = self._calculate_file_hash(dest_path)
-                
-                if src_hash != dest_hash:
-                    self.logger.debug(f"Hash mismatch: {src_path} ({src_hash}) -> {dest_path} ({dest_hash})")
-                    return False
+                hash_type = "full hash"
+            
+            # Compare hashes
+            if src_hash != dest_hash:
+                error_msg = f"Hash mismatch: {src_path} ({hash_type}, src hash: {src_hash}) -> {dest_path} (dest hash: {dest_hash})"
+                self.logger.log(f"  VERIFY ERROR: {error_msg}")
+                return False
+            
+            # Log successful verification
+            self.logger.log(f"  VERIFY SUCCESS: {src_path} ({src_size} bytes, {hash_type}: {src_hash})")
             
             return True
         except Exception as e:
-            self.logger.debug(f"Error verifying copy: {str(e)}")
+            error_msg = f"Verification error for {src_path}: {str(e)}"
+            self.logger.log(f"  VERIFY ERROR: {error_msg}")
+            self.logger.debug(traceback.format_exc())
             return False
     
-    def _calculate_file_hash(self, file_path: str) -> str:
+    def _calculate_sample_hash(self, file_path: str) -> str:
         """
-        Calculate MD5 hash of a file.
+        Calculate a hash for very large files by sampling specific parts of the file.
+        
+        This method calculates a hash based on:
+        - First 16 KB
+        - Middle 16 KB
+        - Last 16 KB
         
         Args:
             file_path: Path to the file
             
         Returns:
-            MD5 hash as hex string
+            XXHash64 hash of sampled file sections
         """
-        hasher = hashlib.md5()
+        hasher = xxhash.xxh64()
+        file_size = os.path.getsize(file_path)
+        
+        with open(file_path, 'rb') as f:
+            # Sample sections for very large files
+            sample_size = 16 * 1024  # 16 KB
+            
+            # Read first 16 KB
+            f.seek(0)
+            hasher.update(f.read(sample_size))
+            
+            # Read middle 16 KB
+            if file_size > 3 * sample_size:
+                f.seek(file_size // 2 - sample_size // 2)
+                hasher.update(f.read(sample_size))
+            
+            # Read last 16 KB
+            if file_size > 2 * sample_size:
+                f.seek(file_size - sample_size)
+                hasher.update(f.read(sample_size))
+        
+        return hasher.hexdigest()
+    
+    def _calculate_file_hash(self, file_path: str) -> str:
+        """
+        Calculate XXHash64 hash of a file.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            XXHash64 hash as hex string
+        """
+        hasher = xxhash.xxh64()
         with open(file_path, 'rb') as f:
             # Read file in chunks to avoid loading large files into memory
             for chunk in iter(lambda: f.read(4096), b''):
@@ -1102,8 +1177,10 @@ class FileProcessor:
             return 1
     
     def _process_found_files(self, pattern: str, found_files: List[str], pattern_found: bool,
-                          all_files: List[Tuple[str, str]], files_to_copy: List[Tuple[str, str]]) -> None:
-        """Process found files for a pattern and update tracking lists."""
+                      all_files: List[Tuple[str, str]], files_to_copy: List[Tuple[str, str]]) -> None:
+        # Use a set to track unique source paths
+        unique_src_paths = set()
+        
         # Handle when pattern wasn't found
         if not pattern_found:
             self.logger.log(f"  No files found matching: {pattern} in any source directory", console=False)
@@ -1114,6 +1191,12 @@ class FileProcessor:
         
         # Process found files
         for src_path in found_files:
+            # Skip if this source path has already been processed
+            if src_path in unique_src_paths:
+                continue
+            
+            unique_src_paths.add(src_path)
+            
             filename = os.path.basename(src_path)
             dest_path = os.path.join(self.dest_dir, filename)
             
@@ -1282,9 +1365,9 @@ class FileProcessor:
                 f"Source directories specified: {len(self.source_dirs)}",
                 f"Total directories searched: {self.total_dirs_searched}",
                 f"Patterns processed: {self.total_patterns}",
-                f"Files found (not accurate yet): {self.found_files}",
-                f"Files {'that would be ' if self.dry_run else ''}copied (not accurate yet): {self.copied_files}",
-                f"Files {'that would be ' if self.dry_run else ''}skipped (already existed): {self.existing_files}",
+                f"Files found : {self.found_files}",
+                f"Files {'that would be ' if self.dry_run else ''}copied : {self.copied_files}",
+                f"Files {'that would be ' if self.dry_run else ''}skipped : {self.existing_files}",
                 f"Patterns with no matches: {self.missing_patterns}",
                 f"Files excluded by pattern: {self.excluded_files}",
                 f"Files excluded by size: {self.size_exceeded_files}",
@@ -1311,9 +1394,9 @@ class FileProcessor:
             print(f"Source directories specified: {len(self.source_dirs)}")
             print(f"Total directories searched: {self.total_dirs_searched}")
             print(f"Patterns processed: {self.total_patterns}")
-            print(f"Files found (not accurate yet): {self.found_files}")
-            print(f"Files {'that would be ' if self.dry_run else ''}copied (not accurate yet): {self.copied_files}")
-            print(f"Files {'that would be ' if self.dry_run else ''}skipped (already existed -- not accurate yet): {self.existing_files}")
+            print(f"Files found : {self.found_files}")
+            print(f"Files {'that would be ' if self.dry_run else ''}copied : {self.copied_files}")
+            print(f"Files {'that would be ' if self.dry_run else ''}skipped : {self.existing_files}")
             print(f"Patterns with no matches: {self.missing_patterns}")
             
             if self.excluded_files > 0:
