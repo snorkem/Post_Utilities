@@ -1,6 +1,7 @@
 # Post Production Utilities
 
-A playground of Python tools that'll make your post-production life way easier! 🎬✨
+A playground of Python tools I cobbled together using brains + a little claude.ai that'll make your post-production life way easier! 🎬✨
+Some of the scripts have GUI versions that you can use if you're less comfortable with terminal. All these were developed primarily for use on MacOS systems.
 
 ## The Toolbox
 
@@ -51,15 +52,4 @@ The ultimate file name makeover artist. Quickly:
 
 ## Get Started
 
-Grab these dependencies and you're good to go:
-```
-pip install pandas pillow numpy openpyxl ffmpeg-python
-```
-
-## Wanna Contribute?
-
-Got ideas? Found a bug? Jump in! This is a collaborative playground for post-production nerds. 🚀
-
-Shoot us a message, open an issue, or drop a pull request. Let's make post-production workflows smoother together!
-
-*Turning post-production chaos into creative magic, one script at a time.*
+Grab the dependencies from the requirments.txt in each utility folder:
