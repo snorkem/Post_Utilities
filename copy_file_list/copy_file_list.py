@@ -522,11 +522,7 @@ class FileFinder:
     def _find_matches(self, pattern: str, src_dir: str) -> Tuple[List[str], Set[str]]:
         """
         Find files matching pattern in source directory using appropriate method.
-        
-        This is the core file matching logic that handles:
-        - Regex vs. glob patterns
-        - Case sensitivity
-        - EDL files with different cases or extensions
+        Enhanced with debug statements to trace directory traversal.
         
         Returns:
             Tuple (list of matching files, set of directories searched)
@@ -535,6 +531,10 @@ class FileFinder:
         dirs_searched = set()
         
         self.logger.debug(f"Searching for '{pattern}' in {src_dir}")
+        
+        # Debug counters
+        subdirectory_count = 0
+        file_count = 0
         
         try:
             # Ensure the source directory exists and is readable
@@ -548,81 +548,68 @@ class FileFinder:
             
             # For EDL files with case-insensitive searches
             if not self.case_sensitive:
+                self.logger.debug(f"Using case-insensitive search for pattern: {pattern}")
+                
                 # Convert pattern to uppercase for comparison
                 upper_pattern = pattern.upper()
                 
                 # Extract base name if pattern has extension
                 base_pattern = os.path.splitext(upper_pattern)[0] if '.' in pattern else upper_pattern
+                self.logger.debug(f"Extracted base pattern: {base_pattern}")
                 
-                # Normalize the pattern by removing version and timestamp info
-                def normalize_filename(filename):
-                    # Remove version and timestamp info
-                    norm = re.sub(r'_V\d+\.\d+', '', filename)
-                    norm = re.sub(r'_TC\d+', '', norm)
-                    return norm.upper()
+                # CRITICAL FIX: Remove the match_found flag that causes early exit
+                # This was causing the search to stop after the first match
                 
-                normalized_pattern = normalize_filename(pattern)
-                
-                # Flag to stop searching after finding a match
-                match_found = False
-                
-                # First pass: Look for exact matches
+                # First pass: Look for all matching files (no early stopping)
                 for root, dirs, files in os.walk(src_dir):
-                    if match_found:
-                        break
-                    
                     # Track this directory
                     dirs_searched.add(root)
+                    subdirectory_count += 1
+                    
+                    # Debug directory traversal
+                    if subdirectory_count % 20 == 0:
+                        self.logger.debug(f"Traversed {subdirectory_count} directories, current: {root}")
                     
                     for filename in files:
+                        file_count += 1
                         full_path = os.path.join(root, filename)
                         
-                        # Exact match (case-insensitive)
-                        if filename.upper() == pattern.upper():
-                            matches = [full_path]
-                            match_found = True
-                            break
+                        # Debug file examination
+                        if file_count % 1000 == 0:
+                            self.logger.debug(f"Examined {file_count} files")
                         
-                        # Normalized match
-                        normalized_filename = normalize_filename(filename)
-                        if normalized_filename == normalized_pattern:
-                            matches = [full_path]
-                            match_found = True
-                            break
-                    
-                    if match_found:
-                        break
+                        # Case-insensitive comparison with filename
+                        upper_filename = filename.upper()
+                        
+                        # Check for exact match
+                        if upper_filename == upper_pattern:
+                            matches.append(full_path)
+                            self.logger.debug(f"Found exact match: {full_path}")
+                            continue
+                        
+                        # Check for base name match
+                        if '.' in filename:
+                            file_base = os.path.splitext(upper_filename)[0]
+                            if file_base == base_pattern:
+                                matches.append(full_path)
+                                self.logger.debug(f"Found base name match: {full_path}")
+                                continue
+                        
+                        # Check for substring match (like using '*' in shell script)
+                        # This is a key addition to match the shell script behavior
+                        if upper_pattern in upper_filename or base_pattern in upper_filename:
+                            matches.append(full_path)
+                            self.logger.debug(f"Found substring match: {full_path}")
+                        
+                        # Special handling for EDL file paths with problematic characters
+                        if '&' in pattern or ' ' in pattern:
+                            # Replace problematic characters with a wildcard
+                            pattern_wildcard = re.sub(r'[&\s]', '.', upper_pattern)
+                            if re.search(pattern_wildcard, upper_filename):
+                                matches.append(full_path)
+                                self.logger.debug(f"Found special character match: {full_path}")
                 
-                # If no match found, try series-based matching
-                if not matches:
-                    # Extract series/project code (e.g., EHDT104 from EHDT104_M01_...)
-                    series_match = re.match(r'^([A-Za-z0-9]+)_', pattern)
-                    if series_match:
-                        series_prefix = series_match.group(1).upper()
-                        
-                        for root, dirs, files in os.walk(src_dir):
-                            if match_found:
-                                break
-                            
-                            # Track this directory
-                            dirs_searched.add(root)
-                            
-                            for filename in files:
-                                full_path = os.path.join(root, filename)
-                                upper_filename = filename.upper()
-                                file_series = re.match(r'^([A-Za-z0-9]+)_', upper_filename)
-                                
-                                # Check if file is from same series
-                                if (file_series and file_series.group(1).upper() == series_prefix):
-                                    # Very strict similarity check
-                                    normalized_filename = normalize_filename(filename)
-                                    if normalized_filename == normalized_pattern:
-                                        matches = [full_path]
-                                        match_found = True
-                                        break
-                            
-                            if match_found:
-                                break
+                self.logger.debug(f"Case-insensitive search completed. Examined {file_count} files in {subdirectory_count} directories.")
             
             # For case-sensitive or regex searches
             else:
@@ -630,34 +617,59 @@ class FileFinder:
                     # Regular expression matching
                     try:
                         regex = re.compile(pattern)
+                        self.logger.debug(f"Using regex search with pattern: {pattern}")
+                        
                         for root, dirs, files in os.walk(src_dir):
                             # Track this directory
                             dirs_searched.add(root)
+                            subdirectory_count += 1
+                            
+                            # Debug directory traversal
+                            if subdirectory_count % 20 == 0:
+                                self.logger.debug(f"Traversed {subdirectory_count} directories, current: {root}")
                             
                             for filename in files:
+                                file_count += 1
                                 full_path = os.path.join(root, filename)
+                                
+                                # Debug file examination
+                                if file_count % 1000 == 0:
+                                    self.logger.debug(f"Examined {file_count} files")
+                                
                                 if regex.search(filename):
-                                    matches = [full_path]
-                                    break
-                            
-                            if matches:
-                                break
-                    except re.error:
-                        self.logger.log(f"Warning: Invalid regex pattern: {pattern}", console=True)
+                                    matches.append(full_path)
+                                    self.logger.debug(f"Found regex match: {full_path}")
+                        
+                        self.logger.debug(f"Regex search completed. Examined {file_count} files in {subdirectory_count} directories.")
+                    except re.error as e:
+                        self.logger.log(f"Warning: Invalid regex pattern: {pattern} - Error: {e}", console=True)
                 else:
                     # Glob pattern matching
+                    self.logger.debug(f"Using glob search with pattern: {pattern}")
+                    
                     for root, dirs, files in os.walk(src_dir):
                         # Track this directory
                         dirs_searched.add(root)
+                        subdirectory_count += 1
+                        
+                        # Debug directory traversal
+                        if subdirectory_count % 20 == 0:
+                            self.logger.debug(f"Traversed {subdirectory_count} directories, current: {root}")
                         
                         for filename in files:
+                            file_count += 1
                             full_path = os.path.join(root, filename)
-                            if fnmatch.fnmatch(filename, pattern):
-                                matches = [full_path]
-                                break
-                        
-                        if matches:
-                            break
+                            
+                            # Debug file examination
+                            if file_count % 1000 == 0:
+                                self.logger.debug(f"Examined {file_count} files")
+                            
+                            # CRITICAL FIX: Add wildcard behavior like the shell script
+                            if fnmatch.fnmatch(filename, pattern) or fnmatch.fnmatch(filename, pattern + "*"):
+                                matches.append(full_path)
+                                self.logger.debug(f"Found glob match: {full_path}")
+                    
+                    self.logger.debug(f"Glob search completed. Examined {file_count} files in {subdirectory_count} directories.")
             
             # Log results
             if matches:
@@ -665,13 +677,18 @@ class FileFinder:
                 self.logger.log(f"    Found {len(matches)} files matching pattern: {pattern}", console=False)
                 for i, match in enumerate(matches[:3]):  # Log first 3 matches
                     self.logger.log(f"      Match {i+1}: {os.path.basename(match)}", console=False)
+                if len(matches) > 3:
+                    self.logger.log(f"      ... and {len(matches) - 3} more", console=False)
             else:
                 self.logger.debug(f"No files found matching '{pattern}'")
                 self.logger.log(f"    No matches found for pattern: {pattern}", console=False)
             
-            self.logger.debug(f"Searched {len(dirs_searched)} directories under {src_dir}")
+            self.logger.debug(f"Search statistics: Searched {len(dirs_searched)} directories, {file_count} files examined, {len(matches)} matches found")
+            
         except Exception as e:
-            print(f"Error somwhere here: {e}")
+            self.logger.debug(f"Error in _find_matches: {str(e)}")
+            self.logger.debug(traceback.format_exc())
+            print(f"Error searching: {e}")
             
         return matches, dirs_searched
     
