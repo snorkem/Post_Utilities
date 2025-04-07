@@ -387,15 +387,18 @@ class CopyFileListGUI(QMainWindow):
         # Create two columns for options
         options_row1 = QHBoxLayout()
         options_row2 = QHBoxLayout()
+        options_row3 = QHBoxLayout()  # New row for additional options
         
         # Row 1 options
         self.show_progress_check = QCheckBox("Show Progress")
         self.show_progress_check.setChecked(True)
         options_row1.addWidget(self.show_progress_check)
         
-        self.use_regex_check = QCheckBox("Use Regex")
-        options_row1.addWidget(self.use_regex_check)
-        
+        self.first_match_only_check = QCheckBox("First Match Only")
+        self.first_match_only_check.setChecked(True)
+        self.first_match_only_check.setToolTip("Stop after finding the first match for each pattern")
+        options_row1.addWidget(self.first_match_only_check)
+
         self.dry_run_check = QCheckBox("Dry Run")
         options_row1.addWidget(self.dry_run_check)
         
@@ -408,6 +411,10 @@ class CopyFileListGUI(QMainWindow):
         self.parallel_check = QCheckBox("Parallel Processing")
         options_row2.addWidget(self.parallel_check)
         
+        self.use_regex_check = QCheckBox("Use Regex")
+        options_row2.addWidget(self.use_regex_check)
+
+        
         max_size_layout = QHBoxLayout()
         max_size_layout.addWidget(QLabel("Max Size (MB):"))
         self.max_size_spin = QSpinBox()
@@ -416,7 +423,9 @@ class CopyFileListGUI(QMainWindow):
         max_size_layout.addWidget(self.max_size_spin)
         options_row2.addLayout(max_size_layout)
         
-        # Exclude file
+        options_row2.addStretch()
+        
+        # Row 3 options (moved exclude file here)
         exclude_layout = QHBoxLayout()
         exclude_layout.addWidget(QLabel("Exclude:"))
         self.exclude_edit = QLineEdit()
@@ -426,11 +435,13 @@ class CopyFileListGUI(QMainWindow):
         
         exclude_layout.addWidget(self.exclude_edit, 1)
         exclude_layout.addWidget(exclude_browse_button)
-        options_row2.addLayout(exclude_layout)
+        options_row3.addLayout(exclude_layout)
+        options_row3.addStretch()
         
         # Add rows to options layout
         options_layout.addLayout(options_row1)
         options_layout.addLayout(options_row2)
+        options_layout.addLayout(options_row3)
         
         self.input_layout.addWidget(options_group)
     
@@ -630,6 +641,9 @@ class CopyFileListGUI(QMainWindow):
         
         if self.parallel_check.isChecked():
             command.append("--parallel")
+        
+        if self.first_match_only_check.isChecked():
+            command.append("--first-match-only")
         
         # Max size
         if self.max_size_spin.value() > 0:

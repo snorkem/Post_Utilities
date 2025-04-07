@@ -457,7 +457,7 @@ class FileFinder:
             return pattern, [], False, set()
     
     def find_file(self, pattern: str, source_dirs: List[str], exclude_patterns: List[str] = None, 
-                 max_size_mb: int = 0) -> Tuple[List[str], bool, Set[str]]:
+             max_size_mb: int = 0, first_match_only: bool = False) -> Tuple[List[str], bool, Set[str]]:
         """
         Find files matching a pattern across source directories.
         
@@ -481,11 +481,8 @@ class FileFinder:
         for src_dir in source_dirs:
             self.logger.log(f"  Searching in: {src_dir}", console=False)
             
-            # Find matching files
-            matches, subdirs_searched = self._find_matches(pattern, src_dir)
-            
             # Track directories searched
-            dirs_searched.update(subdirs_searched)
+            matches, subdirs_searched = self._find_matches(pattern, src_dir, first_match_only)
             
             if matches:
                 pattern_found = True
@@ -519,18 +516,23 @@ class FileFinder:
         
         return found_files, pattern_found, dirs_searched
     
-    def _find_matches(self, pattern: str, src_dir: str) -> Tuple[List[str], Set[str]]:
+    def _find_matches(self, pattern: str, src_dir: str, first_match_only: bool = False) -> Tuple[List[str], Set[str]]:
         """
         Find files matching pattern in source directory using appropriate method.
         Enhanced with debug statements to trace directory traversal.
         
+        Args:
+            pattern: File pattern to search for
+            src_dir: Directory to search in
+            first_match_only: If True, stop after finding the first match
+            
         Returns:
             Tuple (list of matching files, set of directories searched)
         """
         matches = []  # Use a list to maintain order of discovery
         dirs_searched = set()
         
-        self.logger.debug(f"Searching for '{pattern}' in {src_dir}")
+        self.logger.debug(f"Searching for '{pattern}' in {src_dir} (first_match_only={first_match_only})")
         
         # Debug counters
         subdirectory_count = 0
@@ -557,10 +559,10 @@ class FileFinder:
                 base_pattern = os.path.splitext(upper_pattern)[0] if '.' in pattern else upper_pattern
                 self.logger.debug(f"Extracted base pattern: {base_pattern}")
                 
-                # CRITICAL FIX: Remove the match_found flag that causes early exit
-                # This was causing the search to stop after the first match
+                # Process ampersands and special characters for better matching
+                special_char_pattern = re.sub(r'[&\s\(\)\[\]\-\+\.]', '.', upper_pattern)
                 
-                # First pass: Look for all matching files (no early stopping)
+                # First pass: Look for all matching files
                 for root, dirs, files in os.walk(src_dir):
                     # Track this directory
                     dirs_searched.add(root)
@@ -581,33 +583,44 @@ class FileFinder:
                         # Case-insensitive comparison with filename
                         upper_filename = filename.upper()
                         
-                        # Check for exact match
+                        # 1. Check for exact match
                         if upper_filename == upper_pattern:
                             matches.append(full_path)
                             self.logger.debug(f"Found exact match: {full_path}")
+                            if first_match_only:
+                                break
                             continue
                         
-                        # Check for base name match
+                        # 2. Check for base name match
                         if '.' in filename:
                             file_base = os.path.splitext(upper_filename)[0]
                             if file_base == base_pattern:
                                 matches.append(full_path)
                                 self.logger.debug(f"Found base name match: {full_path}")
+                                if first_match_only:
+                                    break
                                 continue
                         
-                        # Check for substring match (like using '*' in shell script)
-                        # This is a key addition to match the shell script behavior
+                        # 3. Check for substring match (like using '*' in shell script)
                         if upper_pattern in upper_filename or base_pattern in upper_filename:
                             matches.append(full_path)
                             self.logger.debug(f"Found substring match: {full_path}")
+                            if first_match_only:
+                                break
+                            continue
                         
-                        # Special handling for EDL file paths with problematic characters
-                        if '&' in pattern or ' ' in pattern:
-                            # Replace problematic characters with a wildcard
-                            pattern_wildcard = re.sub(r'[&\s]', '.', upper_pattern)
-                            if re.search(pattern_wildcard, upper_filename):
+                        # 4. Special handling for EDL file paths with problematic characters
+                        if '&' in pattern or ' ' in pattern or '(' in pattern or ')' in pattern:
+                            if re.search(special_char_pattern, upper_filename):
                                 matches.append(full_path)
                                 self.logger.debug(f"Found special character match: {full_path}")
+                                if first_match_only:
+                                    break
+                                continue
+                    
+                    # If we found a match and only want the first one, stop searching directories
+                    if matches and first_match_only:
+                        break
                 
                 self.logger.debug(f"Case-insensitive search completed. Examined {file_count} files in {subdirectory_count} directories.")
             
@@ -639,6 +652,12 @@ class FileFinder:
                                 if regex.search(filename):
                                     matches.append(full_path)
                                     self.logger.debug(f"Found regex match: {full_path}")
+                                    if first_match_only:
+                                        break
+                            
+                            # If we found a match and only want the first one, stop searching directories
+                            if matches and first_match_only:
+                                break
                         
                         self.logger.debug(f"Regex search completed. Examined {file_count} files in {subdirectory_count} directories.")
                     except re.error as e:
@@ -664,10 +683,16 @@ class FileFinder:
                             if file_count % 1000 == 0:
                                 self.logger.debug(f"Examined {file_count} files")
                             
-                            # CRITICAL FIX: Add wildcard behavior like the shell script
+                            # Add wildcard behavior like the shell script
                             if fnmatch.fnmatch(filename, pattern) or fnmatch.fnmatch(filename, pattern + "*"):
                                 matches.append(full_path)
                                 self.logger.debug(f"Found glob match: {full_path}")
+                                if first_match_only:
+                                    break
+                        
+                        # If we found a match and only want the first one, stop searching directories
+                        if matches and first_match_only:
+                            break
                     
                     self.logger.debug(f"Glob search completed. Examined {file_count} files in {subdirectory_count} directories.")
             
@@ -1040,6 +1065,7 @@ class FileProcessor:
         self.debug = args.debug
         self.parallel = args.parallel
         self.max_workers = args.max_workers
+        self.first_match_only = args.first_match_only
         
         # EDL files use case-insensitive search by default
         self.case_sensitive = not args.edl_file
@@ -1106,7 +1132,8 @@ class FileProcessor:
                 
                 # Find files in parallel
                 pattern_to_files = self.file_finder.find_files_parallel(patterns, self.source_dirs, 
-                                                                     exclude_patterns, self.max_size)
+                                                                     exclude_patterns, self.max_size, 
+                                                                     self.first_match_only)  # Pass first_match_only
                 
                 # Process results
                 for i, pattern in enumerate(patterns):
@@ -1137,7 +1164,7 @@ class FileProcessor:
                     
                     # Find files matching the pattern
                     found_files, pattern_found, dirs_searched = self.file_finder.find_file(
-                        pattern, self.source_dirs, exclude_patterns, self.max_size
+                        pattern, self.source_dirs, exclude_patterns, self.max_size, self.first_match_only  # Pass first_match_only
                     )
                     
                     # Add to the total directories searched
@@ -1479,6 +1506,8 @@ def parse_arguments():
                         help='Skip files that match patterns in EXCLUDE_FILE')
     parser.add_argument('-n', '--dry-run', dest='dry_run', action='store_true',
                         help='Perform a dry run (no actual file copying)')
+    parser.add_argument('--first-match-only', dest='first_match_only', action='store_true',
+                   help='Only use the first match found for each pattern')
     
     # New advanced options
     parser.add_argument('--verify', dest='verify', action='store_true',
