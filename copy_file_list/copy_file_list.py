@@ -1502,11 +1502,42 @@ class FileProcessor:
 
 def parse_arguments():
     """Parse command line arguments."""
+    script_name = os.path.basename(sys.argv[0])
+
     parser = argparse.ArgumentParser(
         description="File Search and Copy Utility v3.1",
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=f"""Examples:
+  Using a simple file list:
+  {script_name} -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt
+
+  Parsing an EDL file to extract source filenames:
+  {script_name} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt
+
+  Perform a dry run with an EDL file:
+  {script_name} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt -n
+  
+  Using glob patterns (default):
+  First create a file list:
+     echo "*.jpg" > files.txt       # Match all JPG files
+     echo "doc_*.pdf" >> files.txt  # Match PDFs starting with "doc_"
+     echo "file_[0-9].txt" >> files.txt  # Match file_0.txt through file_9.txt
+  Then run:
+  {script_name} -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt
+
+  Using regular expressions (with -r flag):
+  First create a file with regex patterns:
+     echo "^.*\\.jpg$" > regex.txt         # Match all JPG files
+     echo "^doc_.*\\.pdf$" >> regex.txt    # Match PDFs starting with "doc_"
+     echo "^file_[0-9]\\.txt$" >> regex.txt  # Match file_0.txt through file_9.txt
+   Then run:
+  {script_name} -s /path/source1,/path/source2 -d /path/dest -f regex.txt -l log.txt -r
+
+  Advanced usage with verification and parallel processing:
+  {script_name} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt -p --verify --parallel
+  """
     )
-    
+
     # Required options
     parser.add_argument('-s', '--source', dest='source_dirs', required=True, 
                         help='One or more directories to search in (comma-separated)')
@@ -1552,42 +1583,6 @@ def parse_arguments():
     args.source_dirs = [d.strip() for d in args.source_dirs.split(',')]
     
     return args
-
-
-def display_usage():
-    """Display usage examples."""
-    script_name = os.path.basename(sys.argv[0])
-    usage_text = f"""
-Examples:
-  # Using a simple file list:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt
-
-  # Parsing an EDL file to extract source filenames:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt
-
-  # Perform a dry run with an EDL file:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt -n
-  
-  # Using glob patterns (default):
-  # First create a file list:
-  #   echo "*.jpg" > files.txt       # Match all JPG files
-  #   echo "doc_*.pdf" >> files.txt  # Match PDFs starting with "doc_"
-  #   echo "file_[0-9].txt" >> files.txt  # Match file_0.txt through file_9.txt
-  # Then run:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest -f files.txt -l log.txt
-
-  # Using regular expressions (with -r flag):
-  # First create a file with regex patterns:
-  #   echo "^.*\\.jpg$" > regex.txt         # Match all JPG files
-  #   echo "^doc_.*\\.pdf$" >> regex.txt    # Match PDFs starting with "doc_"
-  #   echo "^file_[0-9]\\.txt$" >> regex.txt  # Match file_0.txt through file_9.txt
-  # Then run:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest -f regex.txt -l log.txt -r
-
-  # Advanced usage with verification and parallel processing:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt -p --verify --parallel
-"""
-    print(usage_text)
 
 
 def main():
