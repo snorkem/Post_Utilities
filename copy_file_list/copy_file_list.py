@@ -477,14 +477,12 @@ class FileFinder:
         # Log the pattern being processed
         self.logger.log(f"Processing pattern: {pattern}", console=False)
         self.logger.debug(f"Searching for pattern: {pattern} in {len(source_dirs)} directories")
-         
-        # Add a print statement to confirm the flag is being passed correctly
-        print(f"DEBUG: find_file called with first_match_only={first_match_only}")
+        self.logger.debug(f"DEBUG: find_file called with first_match_only={first_match_only}")
         
         for src_dir in source_dirs:
             # CRUCIAL: Stop searching additional directories if we've already found a match
             if first_match_only and found_files:
-                print(f"DEBUG: Already found matches {len(found_files)}, skipping directory {src_dir}")
+                self.logger.debug(f"DEBUG: Already found matches {len(found_files)}, skipping directory {src_dir}")
                 break
                 
             self.logger.log(f"  Searching in: {src_dir}", console=False)
@@ -504,7 +502,7 @@ class FileFinder:
                 if first_match_only:
                     # Only use the first match we found
                     found_files = [matches[0]]
-                    print(f"DEBUG: Found first match in {src_dir}, stopping search")
+                    self.logger.debug(f"DEBUG: Found first match in {src_dir}, stopping search")
                     break
                 else:
                     # Add all matches to our list
@@ -512,7 +510,7 @@ class FileFinder:
         
         if first_match_only and len(found_files) > 1:
             self.logger.debug(f"First-match-only: Final result has {len(found_files)} matches (should be 1)")
-            print(f"DEBUG: WARNING: Found {len(found_files)} with first_match_only enabled, keeping only first match")
+            self.logger.debug(f"DEBUG: WARNING: Found {len(found_files)} with first_match_only enabled, keeping only first match")
             if matches:
                 pattern_found = True
                 self.logger.log(f"    Found matches in {src_dir}", console=False)
@@ -1464,7 +1462,7 @@ class FileProcessor:
             
             # Output summary to console
             print(f"{'Dry run completed' if self.dry_run else 'Operation completed'}. See {self.log_file} for details.")
-            print(f"Source directories specified: {len(self.source_dirs)}")
+            """print(f"Source directories specified: {len(self.source_dirs)}")
             print(f"Total directories searched: {self.total_dirs_searched}")
             print(f"Patterns processed: {self.total_patterns}")
             print(f"Files found : {self.found_files}")
@@ -1478,7 +1476,7 @@ class FileProcessor:
                 print(f"Files excluded by size: {self.size_exceeded_files}")
             
             print(f"Total data {'that would be ' if self.dry_run else ''}copied: {self.total_bytes_copied // (1024 * 1024)} MB")
-            print(f"Total elapsed time: {time_str}")
+            print(f"Total elapsed time: {time_str}")"""
             
             if self.edl_file:
                 print(f"EDL file parsed: {self.edl_file}")
