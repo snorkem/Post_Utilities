@@ -477,13 +477,42 @@ class FileFinder:
         # Log the pattern being processed
         self.logger.log(f"Processing pattern: {pattern}", console=False)
         self.logger.debug(f"Searching for pattern: {pattern} in {len(source_dirs)} directories")
+         
+        # Add a print statement to confirm the flag is being passed correctly
+        print(f"DEBUG: find_file called with first_match_only={first_match_only}")
         
         for src_dir in source_dirs:
+            # CRUCIAL: Stop searching additional directories if we've already found a match
+            if first_match_only and found_files:
+                print(f"DEBUG: Already found matches {len(found_files)}, skipping directory {src_dir}")
+                break
+                
             self.logger.log(f"  Searching in: {src_dir}", console=False)
             
-            # Track directories searched
-            matches, subdirs_searched = self._find_matches(pattern, src_dir, first_match_only)
+            # Find matching files
+            # Only pass first_match_only to _find_matches if we haven't found any matches yet
+            should_find_first_only = first_match_only and not found_files
+            matches, subdirs_searched = self._find_matches(pattern, src_dir, should_find_first_only)
             
+            # Track directories searched
+            dirs_searched.update(subdirs_searched)
+            
+            if matches:
+                pattern_found = True
+                
+                # If first_match_only is set, only take the first match and exit
+                if first_match_only:
+                    # Only use the first match we found
+                    found_files = [matches[0]]
+                    print(f"DEBUG: Found first match in {src_dir}, stopping search")
+                    break
+                else:
+                    # Add all matches to our list
+                    found_files.extend(matches)
+        
+        if first_match_only and len(found_files) > 1:
+            self.logger.debug(f"First-match-only: Final result has {len(found_files)} matches (should be 1)")
+            print(f"DEBUG: WARNING: Found {len(found_files)} with first_match_only enabled, keeping only first match")
             if matches:
                 pattern_found = True
                 self.logger.log(f"    Found matches in {src_dir}", console=False)
