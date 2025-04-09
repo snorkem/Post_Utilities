@@ -954,12 +954,12 @@ class FileCopier:
                 # For very large files, use a sample-based hash to reduce computation time
                 src_hash = self._calculate_sample_hash(src_path)
                 dest_hash = self._calculate_sample_hash(dest_path)
-                hash_type = "sampled hash"
+                hash_type = "XXHash64 sampled hash"
             else:
                 # For smaller files, calculate full hash
                 src_hash = self._calculate_file_hash(src_path)
                 dest_hash = self._calculate_file_hash(dest_path)
-                hash_type = "full hash"
+                hash_type = "XXHash64 full hash"
             
             # Compare hashes
             if src_hash != dest_hash:
@@ -968,7 +968,7 @@ class FileCopier:
                 return False
             
             # Log successful verification
-            self.logger.log(f"  VERIFY SUCCESS: {src_path} ({src_size} bytes, {hash_type}: {src_hash})")
+            self.logger.log(f"  VERIFY SUCCESS: {src_path}\n  {src_size} bytes, {hash_type}\n  Source: {src_hash}\n  Destination: {dest_hash}")
             
             return True
         except Exception as e:
@@ -1164,6 +1164,7 @@ class FileProcessor:
             
             # Initialize a set to track all unique directories searched
             all_unique_dirs_searched = set()
+            all_dirs_searched = set()
             global_missing_patterns = set()
             
             # Get file patterns to process - do this once
@@ -1177,12 +1178,61 @@ class FileProcessor:
             # Load exclude patterns if specified - do this once
             exclude_patterns = self._load_exclude_patterns()
             
-            # Process each destination directory
+            # Log initial information about the operation
+            self.logger.log(f"\n======================================================")
+            self.logger.log(f"Source Directories: {', '.join(self.source_dirs)}")
+            if self.edl_file:
+                self.logger.log(f"EDL File: {self.edl_file}")
+                self.logger.log("Using case-insensitive file matching")
+            else:
+                self.logger.log(f"File List: {self.file_list}")
+            if self.verify:
+                self.logger.log("Verification: Enabled")
+            self.logger.log(f"======================================================\n")
+            
+            # Process each pattern ONCE to find all matching files
+            all_matched_files = {}  # Dict mapping pattern to list of source files
+            
+            # Show progress for pattern search if necessary
+            if self.show_progress and self.total_patterns > 5:
+                print(f"Analyzing files...")
+                progress = ProgressBar(self.total_patterns, prefix='Pattern Search Progress')
+            else:
+                progress = None
+            
+            # Process file patterns to find all matching source files
+            self.missing_patterns_list = []
+            for i, pattern in enumerate(patterns):
+                # Update progress
+                if progress:
+                    progress.update(i + 1)
+                
+                # Find files matching the pattern
+                found_files, pattern_found, dirs_searched = self.file_finder.find_file(
+                    pattern, self.source_dirs, exclude_patterns, self.max_size, self.first_match_only
+                )
+                
+                # Add to the total directories searched
+                for dir_path in dirs_searched:
+                    all_dirs_searched.add(os.path.abspath(dir_path))
+                
+                # Store results for this pattern
+                all_matched_files[pattern] = (found_files, pattern_found)
+                
+                # Track missing patterns
+                if not pattern_found:
+                    self.logger.log(f"  No files found matching: {pattern} in any source directory", console=False)
+                    self.logger.log_missing(pattern)
+                    self.missing_patterns += 1
+                    self.missing_patterns_list.append(pattern)
+            
+            # Finish progress display
+            if progress:
+                print()  # New line after progress bar
+            
+            # Now process each destination directory
             overall_result = 0
             for dest_idx, dest_dir in enumerate(self.dest_dirs):
-                # Reset the unique source paths for each destination
-                self.unique_src_paths = set()
-                
                 # Log that we're processing this destination
                 self.logger.log(f"\n======================================================")
                 self.logger.log(f"Processing destination {dest_idx+1}/{len(self.dest_dirs)}: {dest_dir}")
@@ -1191,83 +1241,44 @@ class FileProcessor:
                 # Validate the destination directory
                 self._validate_destination(dest_dir)
                 
-                # Log initial information for this destination
-                self._log_initial_info(exclude_patterns)
+                # Reset the unique source paths for each destination
+                self.unique_src_paths = set()
                 
                 # Initialize per-destination statistics
                 self.found_files = 0
                 self.copied_files = 0
                 self.skipped_files = 0
                 self.existing_files = 0
-                self.missing_patterns = 0
                 
-                # Process each pattern for this destination
+                # Process matched files for this destination
+                expanded_dest_dir = os.path.expanduser(dest_dir)
                 all_files_to_process = []
                 all_files_to_copy = []
-                all_dirs_searched = set()
                 
-                # Show progress for pattern search if necessary
-                if self.show_progress and self.total_patterns > 5:
-                    print(f"Analyzing files for destination: {dest_dir}")
-                    progress = ProgressBar(self.total_patterns, prefix='Pattern Search Progress')
-                else:
-                    progress = None
-                
-                # Process file patterns (either in parallel or sequentially)
-                if self.parallel and self.total_patterns > 1:
-                    self.logger.log(f"Using parallel processing with {self.file_finder.max_workers} workers")
-                    
-                    # Find files in parallel
-                    pattern_to_files = self.file_finder.find_files_parallel(patterns, self.source_dirs, 
-                                                                         exclude_patterns, self.max_size, 
-                                                                         self.first_match_only)
-                    
-                    # Process results
-                    for i, pattern in enumerate(patterns):
-                        # Update progress
-                        if progress:
-                            progress.update(i + 1)
-                        
-                        # Get results for this pattern
-                        if pattern in pattern_to_files:
-                            found_files, pattern_found, dirs_searched = self.file_finder.find_file(
-                                pattern, self.source_dirs, exclude_patterns, self.max_size, self.first_match_only
-                            )
-                            all_unique_dirs_searched.update(dirs_searched)  
-                            # Debug output
-                            self.logger.debug(f"Pattern {pattern}: Found {len(found_files)} files, pattern_found={pattern_found}")
+                # Process found files for this destination
+                for pattern, (found_files, pattern_found) in all_matched_files.items():
+                    if pattern_found:
+                        for src_path in found_files:
+                            # Skip if this source path has already been processed
+                            if src_path in self.unique_src_paths:
+                                continue
                             
-                            # Process found files
-                            self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
-                                                   all_files_to_copy)
-                    
-                    # Get total directories searched from the finder
-                    for dir_path in self.file_finder.dirs_searched_set:
-                        all_dirs_searched.add(os.path.abspath(dir_path))
-                    
-                else:
-                    # Process patterns sequentially
-                    for i, pattern in enumerate(patterns):
-                        # Update progress
-                        if progress:
-                            progress.update(i + 1)
-                        
-                        # Find files matching the pattern
-                        found_files, pattern_found, dirs_searched = self.file_finder.find_file(
-                            pattern, self.source_dirs, exclude_patterns, self.max_size, self.first_match_only
-                        )
-                        
-                        # Add to the total directories searched
-                        for dir_path in dirs_searched:
-                            all_dirs_searched.add(os.path.abspath(dir_path))
-                        
-                        # Process found files for this destination
-                        self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
-                                               all_files_to_copy)
-                
-                # Finish progress display
-                if progress:
-                    print()  # New line after progress bar
+                            self.unique_src_paths.add(src_path)
+                            
+                            filename = os.path.basename(src_path)
+                            dest_path = os.path.join(expanded_dest_dir, filename)
+                            
+                            # Add file to processing list
+                            all_files_to_process.append((src_path, dest_path))
+                            
+                            # Check if file already exists in destination - use absolute paths
+                            if not os.path.exists(os.path.abspath(dest_path)):
+                                all_files_to_copy.append((src_path, dest_path))
+                                self.logger.debug(f"Will copy: {src_path} -> {dest_path}")
+                            else:
+                                self.existing_files += 1
+                                self.logger.log_existing(filename)
+                                self.logger.debug(f"File already exists: {dest_path}")
                 
                 # Calculate total size of files to copy
                 total_size_bytes = sum(os.path.getsize(src) for src, _ in all_files_to_copy)
@@ -1294,9 +1305,11 @@ class FileProcessor:
                 # Update statistics
                 self.copied_files += dest_copied_files
                 self.total_bytes_copied += dest_bytes_copied
-                global_missing_patterns.update(self.missing_patterns_list)
+            
+            # Calculate final statistics
             self.total_dirs_searched = len(all_dirs_searched)
-            self.missing_patterns = len(global_missing_patterns)
+            self.missing_patterns = len(self.missing_patterns_list)
+            
             # Calculate elapsed time
             elapsed_time = time.time() - start_time
             self.logger.debug(f"Operation completed in {elapsed_time:.2f} seconds")
@@ -1617,18 +1630,19 @@ def parse_arguments():
      echo "^doc_.*\\.pdf$" >> regex.txt    # Match PDFs starting with "doc_"
      echo "^file_[0-9]\\.txt$" >> regex.txt  # Match file_0.txt through file_9.txt
    Then run:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest -f regex.txt -l log.txt -r
+  Using a simple file list with multiple source and destination directories:
+  {script_name} -s /path/source1 -s /path/source2 -d /path/dest1 -d /path/dest2 -f files.txt -l log.txt
 
-  Advanced usage with verification and parallel processing:
-  {script_name} -s /path/source1,/path/source2 -d /path/dest --edl project.edl -l log.txt -p --verify --parallel
+  Parsing an EDL file to extract source filenames:
+  {script_name} -s /path/source1 -s "Path with, comma" -d /path/dest -d "/another/dest, with comma" --edl project.edl -l log.txt
   """
     )
 
     # Required options
-    parser.add_argument('-s', '--source', dest='source_dirs', required=True, 
-                        help='One or more directories to search in (comma-separated)')
-    parser.add_argument('-d', '--dest', dest='dest_dirs', required=True, 
-                        help='One or more directories to copy files to (comma-separated)')
+    parser.add_argument('-s', '--source', dest='source_dirs', action='append', required=True, 
+                        help='Directory to search in (can be specified multiple times)')
+    parser.add_argument('-d', '--dest', dest='dest_dirs', action='append', required=True, 
+                        help='Directory to copy files to (can be specified multiple times)')
     parser.add_argument('-l', '--log', dest='log_file', required=True,
                         help='Log file to write operations to (will append if exists)')
     
@@ -1666,8 +1680,8 @@ def parse_arguments():
     args = parser.parse_args()
     
     # Process source directories
-    args.source_dirs = [os.path.expanduser(d.strip()) for d in args.source_dirs.split(',')]
-    args.dest_dirs = [os.path.expanduser(d.strip()) for d in args.dest_dirs.split(',')]
+    args.source_dirs = [os.path.expanduser(d) for d in args.source_dirs]
+    args.dest_dirs = [os.path.expanduser(d) for d in args.dest_dirs]
     
     return args
 

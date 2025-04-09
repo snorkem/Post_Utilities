@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QRadioButton, QButtonGroup, QSplitter, QListWidget,
     QPlainTextEdit, QDialog, QDialogButtonBox
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QProcess
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QProcess, QSettings
 from PyQt5.QtGui import QTextCursor, QFont, QIcon, QTextCharFormat, QColor
 
 
@@ -226,7 +226,7 @@ class CopyFileListGUI(QMainWindow):
         self.process = None
         self.temp_file_list_path = None
         self.last_selected_directory = os.path.expanduser("~")
-        
+
         # Create central widget and main layout
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -243,6 +243,8 @@ class CopyFileListGUI(QMainWindow):
         
         # Create directories section
         self.create_directories_section()
+        self.initialize_directory_lists()
+        
         
         # Create input method section (file list or EDL)
         self.create_input_method_section()
@@ -275,37 +277,135 @@ class CopyFileListGUI(QMainWindow):
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_ui_state)
         self.update_timer.start(500)  # Update every 500ms
+
+    def initialize_directory_lists(self):
+        """Initialize directory lists from saved settings if available."""
+        # If directories were previously saved as comma-separated in QSettings
+        settings = QSettings()
+        
+        # Load source directories
+        source_dirs = settings.value("source_directories", "")
+        if isinstance(source_dirs, str) and source_dirs:
+            for directory in source_dirs.split(','):
+                directory = directory.strip()
+                if directory and os.path.isdir(directory):
+                    self.source_list.addItem(directory)
+        
+        # Load destination directories
+        dest_dirs = settings.value("destination_directories", "")
+        if isinstance(dest_dirs, str) and dest_dirs:
+            for directory in dest_dirs.split(','):
+                directory = directory.strip()
+                if directory and os.path.isdir(directory):
+                    self.dest_list.addItem(directory)
+
+    def save_settings(self):
+        """Save current settings."""
+        settings = QSettings()
+        
+        # Save source directories
+        source_dirs = []
+        for i in range(self.source_list.count()):
+            source_dirs.append(self.source_list.item(i).text())
+        settings.setValue("source_directories", ",".join(source_dirs))
+        
+        # Save destination directories
+        dest_dirs = []
+        for i in range(self.dest_list.count()):
+            dest_dirs.append(self.dest_list.item(i).text())
+        settings.setValue("destination_directories", ",".join(dest_dirs))
+        
+        # Save other settings
+        settings.setValue("log_file", self.log_edit.text())
+
+    def add_source_directory(self):
+        """Open dialog to browse for a source directory and add it to the list."""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Source Directory", self.last_selected_directory
+        )
+        if directory:
+            self.last_selected_directory = directory
+            # Check if this directory is already in the list
+            existing_dirs = [self.source_list.item(i).text() for i in range(self.source_list.count())]
+            if directory not in existing_dirs:
+                self.source_list.addItem(directory)
+
+    def remove_source_directory(self):
+        """Remove the selected source directory from the list."""
+        selected_items = self.source_list.selectedItems()
+        for item in selected_items:
+            row = self.source_list.row(item)
+            self.source_list.takeItem(row)
+
+    def add_dest_directory(self):
+        """Open dialog to browse for a destination directory and add it to the list."""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Destination Directory", self.last_selected_directory
+        )
+        if directory:
+            self.last_selected_directory = directory
+            # Check if this directory is already in the list
+            existing_dirs = [self.dest_list.item(i).text() for i in range(self.dest_list.count())]
+            if directory not in existing_dirs:
+                self.dest_list.addItem(directory)
+
+    def remove_dest_directory(self):
+        """Remove the selected destination directory from the list."""
+        selected_items = self.dest_list.selectedItems()
+        for item in selected_items:
+            row = self.dest_list.row(item)
+            self.dest_list.takeItem(row)
     
     def create_directories_section(self):
         """Create the source and destination directory input section."""
         directories_group = QGroupBox("Directories")
         directories_layout = QVBoxLayout(directories_group)
         
-        # Source directories
-        source_layout = QHBoxLayout()
-        source_label = QLabel("Source Directories:")
-        self.source_edit = QLineEdit()
-        self.source_edit.setPlaceholderText("Comma-separated list of source directories")
-        source_browse_button = QPushButton("Browse...")
-        source_browse_button.clicked.connect(self.browse_source_directories)
+        # Source directories - using a list widget
+        source_group = QGroupBox("Source Directories")
+        source_layout = QVBoxLayout(source_group)
         
-        source_layout.addWidget(source_label)
-        source_layout.addWidget(self.source_edit, 1)
-        source_layout.addWidget(source_browse_button)
-        directories_layout.addLayout(source_layout)
+        self.source_list = QListWidget()
+        self.source_list.setAlternatingRowColors(True)
+        self.source_list.setMaximumHeight(120)  # Limit height
         
-        # Destination directory - use the same approach as source directories
-        dest_layout = QHBoxLayout()
-        dest_label = QLabel("Destination Directories:")
-        self.dest_edit = QLineEdit()
-        self.dest_edit.setPlaceholderText("Comma-separated list of destination directories")
-        dest_browse_button = QPushButton("Browse...")
-        dest_browse_button.clicked.connect(self.browse_destination_directories)
+        source_buttons_layout = QHBoxLayout()
+        add_source_button = QPushButton("Add...")
+        add_source_button.clicked.connect(self.add_source_directory)
+        remove_source_button = QPushButton("Remove")
+        remove_source_button.clicked.connect(self.remove_source_directory)
         
-        dest_layout.addWidget(dest_label)
-        dest_layout.addWidget(self.dest_edit, 1)
-        dest_layout.addWidget(dest_browse_button)
-        directories_layout.addLayout(dest_layout)
+        source_buttons_layout.addWidget(add_source_button)
+        source_buttons_layout.addWidget(remove_source_button)
+        source_buttons_layout.addStretch()
+        
+        source_layout.addWidget(self.source_list)
+        source_layout.addLayout(source_buttons_layout)
+        
+        directories_layout.addWidget(source_group)
+        
+        # Destination directories - using a list widget
+        dest_group = QGroupBox("Destination Directories")
+        dest_layout = QVBoxLayout(dest_group)
+        
+        self.dest_list = QListWidget()
+        self.dest_list.setAlternatingRowColors(True)
+        self.dest_list.setMaximumHeight(120)  # Limit height
+        
+        dest_buttons_layout = QHBoxLayout()
+        add_dest_button = QPushButton("Add...")
+        add_dest_button.clicked.connect(self.add_dest_directory)
+        remove_dest_button = QPushButton("Remove")
+        remove_dest_button.clicked.connect(self.remove_dest_directory)
+        
+        dest_buttons_layout.addWidget(add_dest_button)
+        dest_buttons_layout.addWidget(remove_dest_button)
+        dest_buttons_layout.addStretch()
+        
+        dest_layout.addWidget(self.dest_list)
+        dest_layout.addLayout(dest_buttons_layout)
+        
+        directories_layout.addWidget(dest_group)
         
         # Log file
         log_layout = QHBoxLayout()
@@ -585,13 +685,13 @@ class CopyFileListGUI(QMainWindow):
     def validate_inputs(self):
         """Validate user inputs before running the script."""
         # Check source directories
-        if not self.source_edit.text():
-            QMessageBox.warning(self, "Input Error", "Please specify at least one source directory.")
+        if self.source_list.count() == 0:
+            QMessageBox.warning(self, "Input Error", "Please add at least one source directory.")
             return False
         
         # Check destination directory
-        if not self.dest_edit.text():
-            QMessageBox.warning(self, "Input Error", "Please specify at least one destination directory.")
+        if self.dest_list.count() == 0:
+            QMessageBox.warning(self, "Input Error", "Please add at least one destination directory.")
             return False
         
         # Check log file
@@ -616,11 +716,15 @@ class CopyFileListGUI(QMainWindow):
         # Base command
         command = ["python3", "copy_file_list.py"]
         
-        # Source directories
-        command.extend(["-s", self.source_edit.text()])
+        # Source directories - each directory gets its own -s argument
+        for i in range(self.source_list.count()):
+            source_dir = self.source_list.item(i).text()
+            command.extend(["-s", source_dir])
         
-        # Destination directory
-        command.extend(["-d", self.dest_edit.text()])
+        # Destination directories - each directory gets its own -d argument
+        for i in range(self.dest_list.count()):
+            dest_dir = self.dest_list.item(i).text()
+            command.extend(["-d", dest_dir])
         
         # Log file
         command.extend(["-l", self.log_edit.text()])
@@ -659,7 +763,7 @@ class CopyFileListGUI(QMainWindow):
             command.extend(["-x", self.exclude_edit.text()])
         
         return command
-    
+        
     def run_script(self):
         """Run the copy_file_list.py script with the specified options."""
         if not self.validate_inputs():
