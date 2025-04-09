@@ -571,8 +571,15 @@ class FileFinder:
         subdirectory_count = 0
         file_count = 0
         
+        # Flag to track if we should stop early
+        should_stop = False
+        
         # Iterate through all source directories
         for src_dir in src_dirs:
+            # Skip if we already found what we needed
+            if should_stop:
+                break
+                
             try:
                 # Ensure the source directory exists and is readable
                 if not os.path.isdir(src_dir):
@@ -623,6 +630,7 @@ class FileFinder:
                                 matches.append(full_path)
                                 self.logger.debug(f"Found exact match: {full_path}")
                                 if first_match_only:
+                                    should_stop = True
                                     break
                                 continue
                             
@@ -654,11 +662,11 @@ class FileFinder:
                                     continue
                         
                         # If we found a match and only want the first one, stop searching directories
-                        if matches and first_match_only:
+                        if should_stop:
                             break
-                    
-                    self.logger.debug(f"Case-insensitive search completed. Examined {file_count} files in {subdirectory_count} directories.")
                 
+                    self.logger.debug(f"Case-insensitive search completed. Examined {file_count} files in {subdirectory_count} directories.")
+                                    
                 # For case-sensitive or regex searches
                 else:
                     if self.use_regex:
@@ -750,7 +758,7 @@ class FileFinder:
                 self.logger.debug(traceback.format_exc())
                 print(f"Error searching directory {src_dir} with error:\n{e}")
                 
-            return matches, dirs_searched
+        return matches, dirs_searched
     
     def _should_exclude(self, file_path: str, exclude_patterns: List[str]) -> bool:
         """Check if a file should be excluded based on exclude patterns."""
