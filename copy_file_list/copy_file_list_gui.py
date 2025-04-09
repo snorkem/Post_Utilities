@@ -225,6 +225,7 @@ class CopyFileListGUI(QMainWindow):
         # Initialize attributes
         self.process = None
         self.temp_file_list_path = None
+        self.temp_exclude_list_path = None
         self.last_selected_directory = os.path.expanduser("~")
 
         # Create central widget and main layout
@@ -532,9 +533,12 @@ class CopyFileListGUI(QMainWindow):
         self.exclude_edit.setPlaceholderText("Path to exclude file")
         exclude_browse_button = QPushButton("Browse...")
         exclude_browse_button.clicked.connect(self.browse_exclude_file)
+        exclude_manual_button = QPushButton("Enter List...")
+        exclude_manual_button.clicked.connect(self.enter_exclude_list)
         
         exclude_layout.addWidget(self.exclude_edit, 1)
         exclude_layout.addWidget(exclude_browse_button)
+        exclude_layout.addWidget(exclude_manual_button)
         options_row3.addLayout(exclude_layout)
         options_row3.addStretch()
         
@@ -545,6 +549,36 @@ class CopyFileListGUI(QMainWindow):
         
         self.input_layout.addWidget(options_group)
     
+    def enter_exclude_list(self):
+        """Open dialog to manually enter exclude patterns."""
+        dialog = FileInputDialog(self)
+        dialog.setWindowTitle("Enter Exclude Patterns")
+        # Set instructions specifically for exclude patterns
+        dialog.file_list_edit.setPlaceholderText("Example:\n*.tmp\n*.bak\nbackup_*.*")
+        
+        if dialog.exec_() == QDialog.Accepted:
+            exclude_list = dialog.get_file_list()
+            if exclude_list:
+                # Create a temporary file with the list
+                if hasattr(self, 'temp_exclude_list_path') and self.temp_exclude_list_path:
+                    try:
+                        os.unlink(self.temp_exclude_list_path)
+                    except OSError:
+                        pass
+                    
+                # Generate a new temporary file path
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                self.temp_exclude_list_path = os.path.join(
+                    os.path.expanduser("~"), f"exclude_list_{timestamp}.txt"
+                )
+                
+                # Write the list to the temporary file
+                with open(self.temp_exclude_list_path, 'w') as f:
+                    f.write('\n'.join(exclude_list))
+                
+                # Update the exclude edit field
+                self.exclude_edit.setText(self.temp_exclude_list_path)
+
     def create_action_buttons(self):
         """Create action buttons (Run, Cancel, etc.)."""
         buttons_layout = QHBoxLayout()
@@ -957,7 +991,7 @@ class CopyFileListGUI(QMainWindow):
         is_process_running = False
         if self.process is not None:
             is_process_running = self.process.state() == QProcess.Running
-            
+                
         if is_process_running:
             # Confirm with user before closing
             reply = QMessageBox.question(
@@ -974,10 +1008,19 @@ class CopyFileListGUI(QMainWindow):
                 if self.process.state() == QProcess.Running:
                     self.process.kill()
         
-        # Clean up temporary file if it exists
-        if self.temp_file_list_path and os.path.exists(self.temp_file_list_path):
+        # Save settings before closing
+        self.save_settings()
+        
+        # Clean up temporary files if they exist
+        if hasattr(self, 'temp_file_list_path') and self.temp_file_list_path and os.path.exists(self.temp_file_list_path):
             try:
                 os.unlink(self.temp_file_list_path)
+            except OSError:
+                pass
+                
+        if hasattr(self, 'temp_exclude_list_path') and self.temp_exclude_list_path and os.path.exists(self.temp_exclude_list_path):
+            try:
+                os.unlink(self.temp_exclude_list_path)
             except OSError:
                 pass
         
