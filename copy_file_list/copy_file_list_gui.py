@@ -294,13 +294,13 @@ class CopyFileListGUI(QMainWindow):
         source_layout.addWidget(source_browse_button)
         directories_layout.addLayout(source_layout)
         
-        # Destination directory
+        # Destination directory - use the same approach as source directories
         dest_layout = QHBoxLayout()
-        dest_label = QLabel("Destination Directory:")
+        dest_label = QLabel("Destination Directories:")
         self.dest_edit = QLineEdit()
-        self.dest_edit.setPlaceholderText("Directory to copy files to")
+        self.dest_edit.setPlaceholderText("Comma-separated list of destination directories")
         dest_browse_button = QPushButton("Browse...")
-        dest_browse_button.clicked.connect(self.browse_destination_directory)
+        dest_browse_button.clicked.connect(self.browse_destination_directories)
         
         dest_layout.addWidget(dest_label)
         dest_layout.addWidget(self.dest_edit, 1)
@@ -506,14 +506,19 @@ class CopyFileListGUI(QMainWindow):
             else:
                 self.source_edit.setText(directory)
     
-    def browse_destination_directory(self):
-        """Open dialog to browse for destination directory."""
+    def browse_destination_directories(self):
+        """Open dialog to browse for destination directories."""
         directory = QFileDialog.getExistingDirectory(
             self, "Select Destination Directory", self.last_selected_directory
         )
         if directory:
             self.last_selected_directory = directory
-            self.dest_edit.setText(directory)
+            # Append to existing directories with comma separator
+            current_dirs = self.dest_edit.text()
+            if current_dirs:
+                self.dest_edit.setText(f"{current_dirs},{directory}")
+            else:
+                self.dest_edit.setText(directory)
     
     def browse_log_file(self):
         """Open dialog to browse for log file."""
@@ -586,7 +591,7 @@ class CopyFileListGUI(QMainWindow):
         
         # Check destination directory
         if not self.dest_edit.text():
-            QMessageBox.warning(self, "Input Error", "Please specify a destination directory.")
+            QMessageBox.warning(self, "Input Error", "Please specify at least one destination directory.")
             return False
         
         # Check log file

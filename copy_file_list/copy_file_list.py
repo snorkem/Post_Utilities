@@ -361,7 +361,7 @@ class FileFinder:
         self.total_dirs_searched = 0
         
     def find_files_parallel(self, patterns: List[str], source_dirs: List[str], exclude_patterns: List[str] = None,
-                          max_size_mb: int = 0) -> Dict[str, Tuple[List[str], bool]]:
+                      max_size_mb: int = 0, first_match_only: bool = False) -> Dict[str, Tuple[List[str], bool]]:
         """
         Find files matching multiple patterns across source directories using parallel processing.
         
@@ -370,15 +370,16 @@ class FileFinder:
             source_dirs: List of directories to search
             exclude_patterns: List of patterns to exclude
             max_size_mb: Maximum file size in MB (0 for no limit)
+            first_match_only: If True, stop after finding the first match for each pattern
             
         Returns:
             Dictionary mapping each pattern to a tuple (found_files, pattern_found)
         """
         # Use the sequential debug version instead - much more reliable
-        return self.find_files_sequential(patterns, source_dirs, exclude_patterns, max_size_mb)
+        return self.find_files_sequential(patterns, source_dirs, exclude_patterns, max_size_mb, first_match_only)
     
     def find_files_sequential(self, patterns: List[str], source_dirs: List[str], exclude_patterns: List[str] = None,
-                            max_size_mb: int = 0) -> Dict[str, Tuple[List[str], bool]]:
+                        max_size_mb: int = 0, first_match_only: bool = False) -> Dict[str, Tuple[List[str], bool]]:
         """
         Sequential version of find_files_parallel.
         
@@ -398,7 +399,7 @@ class FileFinder:
                 
                 # Find files for this pattern
                 found_files, pattern_found, dirs_searched = self.find_file(
-                    pattern, source_dirs, exclude_patterns, max_size_mb
+                    pattern, source_dirs, exclude_patterns, max_size_mb, first_match_only
                 )
                 
                 # Store results
@@ -428,7 +429,7 @@ class FileFinder:
     @staticmethod
     def _parallel_search_task(pattern: str, source_dirs: List[str], case_sensitive: bool, 
                             use_regex: bool, exclude_patterns: List[str] = None,
-                            max_size_mb: int = 0) -> Tuple[str, List[str], bool, Set[str]]:
+                            max_size_mb: int = 0, first_match_only: bool = False) -> Tuple[str, List[str], bool, Set[str]]:
         """
         Static task function for parallel file finding.
         This avoids issues with pickling class methods in multiprocessing.
@@ -446,7 +447,7 @@ class FileFinder:
             
             # Find files
             found_files, pattern_found, dirs_searched = finder.find_file(
-                pattern, source_dirs, exclude_patterns, max_size_mb
+                pattern, source_dirs, exclude_patterns, max_size_mb, first_match_only
             )
             
             return pattern, found_files, pattern_found, dirs_searched
@@ -455,7 +456,7 @@ class FileFinder:
             logging.error(f"Error in parallel search task for pattern {pattern}: {str(e)}")
             logging.debug(traceback.format_exc())
             return pattern, [], False, set()
-    
+
     def find_file(self, pattern: str, source_dirs: List[str], exclude_patterns: List[str] = None, 
              max_size_mb: int = 0, first_match_only: bool = False) -> Tuple[List[str], bool, Set[str]]:
         """
@@ -1077,11 +1078,15 @@ class FileProcessor:
     def __init__(self, args):
         # Core parameters
         self.source_dirs = args.source_dirs
-        self.dest_dir = args.dest_dir
+        self.dest_dirs = args.dest_dirs  # This is now a list of destination directories
+        self.dest_dir = None  # Will be set during processing of each destination
         self.file_list = args.file_list
         self.edl_file = args.edl_file
         self.log_file = args.log_file
         
+        # Class-wide set to track unique source paths
+        self.unique_src_paths = set()
+
         # Operation flags
         self.show_progress = args.show_progress
         self.use_regex = args.use_regex
@@ -1118,6 +1123,18 @@ class FileProcessor:
         self.missing_patterns_list = []
         self.total_dirs_searched = 0
     
+    def _validate_destination(self, dest_dir):
+        """Validate a destination directory."""
+        # Create destination directory if it doesn't exist and not in dry run mode
+        if not self.dry_run and not os.path.isdir(dest_dir):
+            try:
+                os.makedirs(dest_dir)
+                self.logger.log(f"Created destination directory: {dest_dir}")
+            except Exception as e:
+                raise ValueError(f"Failed to create destination directory: {dest_dir} - {str(e)}")
+        elif self.dry_run and not os.path.isdir(dest_dir):
+            self.logger.log(f"Note: Destination directory does not exist, but would be created in actual run: {dest_dir}")
+
     def run(self):
         """Run the file processing operation."""
         try:
@@ -1127,10 +1144,7 @@ class FileProcessor:
             # Validate all inputs
             self._validate_inputs()
             
-            # Load exclude patterns if specified
-            exclude_patterns = self._load_exclude_patterns()
-            
-            # Get file patterns to process
+            # Get file patterns to process - do this once
             if self.edl_file:
                 patterns = self.edl_parser.parse_edl_file(self.edl_file)
             else:
@@ -1138,106 +1152,134 @@ class FileProcessor:
             
             self.total_patterns = len(patterns)
             
-            # Log initial information
-            self._log_initial_info(exclude_patterns)
+            # Load exclude patterns if specified - do this once
+            exclude_patterns = self._load_exclude_patterns()
             
-            # Process each pattern
-            all_files_to_process = []
-            all_files_to_copy = []
-            all_dirs_searched = set()
-            
-            # Show progress for pattern search if necessary
-            if self.show_progress and self.total_patterns > 5:
-                print(f"Analyzing files across {len(self.source_dirs)} source directories...")
-                progress = ProgressBar(self.total_patterns, prefix='Pattern Search Progress')
-            else:
-                progress = None
-            
-            # Process file patterns (either in parallel or sequentially)
-            if self.parallel and self.total_patterns > 1:
-                self.logger.log(f"Using parallel processing with {self.file_finder.max_workers} workers")
+            # Process each destination directory
+            overall_result = 0
+            for dest_idx, dest_dir in enumerate(self.dest_dirs):
+                # Set current destination
+                self.dest_dir = dest_dir
+
+                self.unique_src_paths = set()
                 
-                # Find files in parallel
-                pattern_to_files = self.file_finder.find_files_parallel(patterns, self.source_dirs, 
-                                                                     exclude_patterns, self.max_size, 
-                                                                     self.first_match_only)  # Pass first_match_only
+                # Log that we're processing this destination
+                self.logger.log(f"\n======================================================")
+                self.logger.log(f"Processing destination {dest_idx+1}/{len(self.dest_dirs)}: {dest_dir}")
+                self.logger.log(f"======================================================\n")
                 
-                # Process results
-                for i, pattern in enumerate(patterns):
-                    # Update progress
-                    if progress:
-                        progress.update(i + 1)
+                # Validate the destination directory
+                self._validate_destination(dest_dir)
+                
+                # Log initial information for this destination
+                self._log_initial_info(exclude_patterns)
+                
+                # Initialize per-destination statistics
+                self.found_files = 0
+                self.copied_files = 0
+                self.skipped_files = 0
+                self.existing_files = 0
+                
+                # Process each pattern for this destination
+                all_files_to_process = []
+                all_files_to_copy = []
+                all_dirs_searched = set()
+                
+                # Show progress for pattern search if necessary
+                if self.show_progress and self.total_patterns > 5:
+                    print(f"Analyzing files for destination: {dest_dir}")
+                    progress = ProgressBar(self.total_patterns, prefix='Pattern Search Progress')
+                else:
+                    progress = None
+                
+                # Process file patterns (either in parallel or sequentially)
+                if self.parallel and self.total_patterns > 1:
+                    self.logger.log(f"Using parallel processing with {self.file_finder.max_workers} workers")
                     
-                    # Get results for this pattern
-                    if pattern in pattern_to_files:
-                        found_files, pattern_found = pattern_to_files[pattern]
+                    # Find files in parallel
+                    pattern_to_files = self.file_finder.find_files_parallel(patterns, self.source_dirs, 
+                                                                         exclude_patterns, self.max_size, 
+                                                                         self.first_match_only)
+                    
+                    # Process results
+                    for i, pattern in enumerate(patterns):
+                        # Update progress
+                        if progress:
+                            progress.update(i + 1)
                         
-                        # Debug output
-                        self.logger.debug(f"Pattern {pattern}: Found {len(found_files)} files, pattern_found={pattern_found}")
+                        # Get results for this pattern
+                        if pattern in pattern_to_files:
+                            found_files, pattern_found = pattern_to_files[pattern]
+                            
+                            # Debug output
+                            self.logger.debug(f"Pattern {pattern}: Found {len(found_files)} files, pattern_found={pattern_found}")
+                            
+                            # Process found files
+                            self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
+                                                   all_files_to_copy)
+                    
+                    # Get total directories searched from the finder
+                    all_dirs_searched = self.file_finder.dirs_searched_set
+                    self.total_dirs_searched += len(all_dirs_searched)
+                    
+                else:
+                    # Process patterns sequentially
+                    for i, pattern in enumerate(patterns):
+                        # Update progress
+                        if progress:
+                            progress.update(i + 1)
                         
-                        # Process found files
+                        # Find files matching the pattern
+                        found_files, pattern_found, dirs_searched = self.file_finder.find_file(
+                            pattern, self.source_dirs, exclude_patterns, self.max_size, self.first_match_only
+                        )
+                        
+                        # Add to the total directories searched
+                        all_dirs_searched.update(dirs_searched)
+                        self.total_dirs_searched += len(dirs_searched)
+                        
+                        # Process found files for this destination
                         self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
                                                all_files_to_copy)
                 
-                # Get total directories searched from the finder
-                all_dirs_searched = self.file_finder.dirs_searched_set
+                # Finish progress display
+                if progress:
+                    print()  # New line after progress bar
                 
-            else:
-                # Process patterns sequentially
-                for i, pattern in enumerate(patterns):
-                    # Update progress
-                    if progress:
-                        progress.update(i + 1)
-                    
-                    # Find files matching the pattern
-                    found_files, pattern_found, dirs_searched = self.file_finder.find_file(
-                        pattern, self.source_dirs, exclude_patterns, self.max_size, self.first_match_only  # Pass first_match_only
-                    )
-                    
-                    # Add to the total directories searched
-                    all_dirs_searched.update(dirs_searched)
-                    
-                    # Process found files
-                    self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
-                                           all_files_to_copy)
-            
-            # Store total directories searched
-            self.total_dirs_searched = len(all_dirs_searched)
-            self.logger.debug(f"Traversed a total of {self.total_dirs_searched} directories")
-            
-            # Finish progress display
-            if progress:
-                print()  # New line after progress bar
-            
-            # Calculate total size of files to copy
-            total_size_bytes = sum(os.path.getsize(src) for src, _ in all_files_to_copy)
-            total_size_kb = total_size_bytes // 1024
-            
-            # Check disk space
-            if not self.dry_run:
-                if not DiskSpaceChecker.check_available_space(self.dest_dir, total_size_kb):
-                    self.logger.log("Error: Insufficient disk space for copy operation")
-                    return 1
-            else:
-                self.logger.log(f"Would check for at least {total_size_kb // 1024} MB of free space in {self.dest_dir}")
-            
-            # Log information about files to copy
-            self._log_files_info(all_files_to_process, all_files_to_copy, total_size_kb)
-            
-            # Copy files
-            self.found_files = len(all_files_to_process)
-            self.copied_files, self.total_bytes_copied = self.file_copier.copy_files(
-                all_files_to_copy, self.show_progress
-            )
+                # Calculate total size of files to copy
+                total_size_bytes = sum(os.path.getsize(src) for src, _ in all_files_to_copy)
+                total_size_kb = total_size_bytes // 1024
+                
+                # Check disk space for this destination
+                if not self.dry_run:
+                    if not DiskSpaceChecker.check_available_space(dest_dir, total_size_kb):
+                        self.logger.log(f"Error: Insufficient disk space in destination: {dest_dir}")
+                        overall_result = 1
+                        continue  # Skip this destination, try the next one
+                else:
+                    self.logger.log(f"Would check for at least {total_size_kb // 1024} MB of free space in {dest_dir}")
+                
+                # Log information about files to copy for this destination
+                self._log_files_info(all_files_to_process, all_files_to_copy, total_size_kb)
+                
+                # Copy files to this destination
+                self.found_files = len(all_files_to_process)
+                dest_copied_files, dest_bytes_copied = self.file_copier.copy_files(
+                    all_files_to_copy, self.show_progress
+                )
+                
+                # Update statistics
+                self.copied_files += dest_copied_files
+                self.total_bytes_copied += dest_bytes_copied
             
             # Calculate elapsed time
             elapsed_time = time.time() - start_time
             self.logger.debug(f"Operation completed in {elapsed_time:.2f} seconds")
             
-            # Log summary
+            # Log overall summary
             self._log_summary(elapsed_time)
             
-            return 0
+            return overall_result
         
         except KeyboardInterrupt:
             self.logger.log("\nOperation cancelled by user.")
@@ -1248,10 +1290,7 @@ class FileProcessor:
             return 1
     
     def _process_found_files(self, pattern: str, found_files: List[str], pattern_found: bool,
-                      all_files: List[Tuple[str, str]], files_to_copy: List[Tuple[str, str]]) -> None:
-        # Use a set to track unique source paths
-        unique_src_paths = set()
-        
+                  all_files: List[Tuple[str, str]], files_to_copy: List[Tuple[str, str]]) -> None:
         # Handle when pattern wasn't found
         if not pattern_found:
             self.logger.log(f"  No files found matching: {pattern} in any source directory", console=False)
@@ -1263,23 +1302,28 @@ class FileProcessor:
         # Process found files
         for src_path in found_files:
             # Skip if this source path has already been processed
-            if src_path in unique_src_paths:
+            if src_path in self.unique_src_paths:
                 continue
             
-            unique_src_paths.add(src_path)
+            self.unique_src_paths.add(src_path)
             
             filename = os.path.basename(src_path)
-            dest_path = os.path.join(self.dest_dir, filename)
+            
+            # Expand any ~ in the destination path for proper resolution
+            expanded_dest_dir = os.path.expanduser(self.dest_dir)
+            dest_path = os.path.join(expanded_dest_dir, filename)
             
             # Add file to processing list
             all_files.append((src_path, dest_path))
             
-            # Check if file already exists in destination
-            if not os.path.exists(dest_path):
+            # Check if file already exists in destination - use absolute paths
+            if not os.path.exists(os.path.abspath(dest_path)):
                 files_to_copy.append((src_path, dest_path))
+                self.logger.debug(f"Will copy: {src_path} -> {dest_path}")
             else:
                 self.existing_files += 1
                 self.logger.log_existing(filename)
+                self.logger.debug(f"File already exists: {dest_path}")
     
     def _validate_inputs(self):
         """Validate all input parameters."""
@@ -1290,6 +1334,22 @@ class FileProcessor:
             
             if not os.access(src_dir, os.R_OK):
                 raise ValueError(f"Source directory is not readable: {src_dir}")
+        
+        # Check destination directories
+        if not self.dest_dirs:
+            raise ValueError("No destination directories specified")
+        
+        for dest_dir in self.dest_dirs:
+            # Check if destination paths are valid
+            try:
+                # Get absolute path to catch any path syntax errors
+                dest_path = os.path.abspath(dest_dir)
+                
+                # Check if path is too long
+                if len(dest_path) > 260:  # Maximum path length on Windows
+                    self.logger.log(f"Warning: Destination path may be too long: {dest_dir}")
+            except Exception as e:
+                raise ValueError(f"Invalid destination directory path: {dest_dir} - {str(e)}")
         
         # Check EDL file or file list
         if self.edl_file:
@@ -1315,15 +1375,14 @@ class FileProcessor:
             if not os.access(self.exclude_file, os.R_OK):
                 raise ValueError(f"Exclude file is not readable: {self.exclude_file}")
         
-        # Create destination directory if it doesn't exist
-        if not self.dry_run and not os.path.isdir(self.dest_dir):
+        # Create log directory if needed
+        log_dir = os.path.dirname(self.log_file)
+        if log_dir and not os.path.isdir(log_dir) and not self.dry_run:
             try:
-                os.makedirs(self.dest_dir)
-                print(f"Created destination directory: {self.dest_dir}")
+                os.makedirs(log_dir)
+                self.logger.debug(f"Created log directory: {log_dir}")
             except Exception as e:
-                raise ValueError(f"Failed to create destination directory: {self.dest_dir} - {str(e)}")
-        elif self.dry_run and not os.path.isdir(self.dest_dir):
-            print(f"Note: Destination directory does not exist, but would be created in actual run: {self.dest_dir}")
+                raise ValueError(f"Failed to create log directory: {log_dir} - {str(e)}")
         
         # Validate max_workers
         if self.max_workers is not None and self.max_workers <= 0:
@@ -1541,8 +1600,8 @@ def parse_arguments():
     # Required options
     parser.add_argument('-s', '--source', dest='source_dirs', required=True, 
                         help='One or more directories to search in (comma-separated)')
-    parser.add_argument('-d', '--dest', dest='dest_dir', required=True,
-                        help='Directory to copy files to')
+    parser.add_argument('-d', '--dest', dest='dest_dirs', required=True, 
+                        help='One or more directories to copy files to (comma-separated)')
     parser.add_argument('-l', '--log', dest='log_file', required=True,
                         help='Log file to write operations to (will append if exists)')
     
@@ -1581,9 +1640,40 @@ def parse_arguments():
     
     # Process source directories
     args.source_dirs = [d.strip() for d in args.source_dirs.split(',')]
+    args.dest_dirs = [d.strip() for d in args.dest_dirs.split(',')]
     
     return args
 
+
+# New function to handle multiple destinations
+def copy_to_multiple_destinations(source_dirs, dest_dirs, file_list, edl_file, options):
+    """
+    Copy files to multiple destination directories.
+    
+    Args:
+        source_dirs: List of source directories
+        dest_dirs: List of destination directories
+        file_list: Path to file list
+        edl_file: Path to EDL file
+        options: Dictionary of additional options
+    """
+    results = []
+    
+    for dest_dir in dest_dirs:
+        # Create a processor for this destination
+        processor = FileProcessor(
+            source_dirs=source_dirs,
+            dest_dir=dest_dir,
+            file_list=file_list,
+            edl_file=edl_file,
+            **options
+        )
+        
+        # Run the processor
+        result = processor.run()
+        results.append((dest_dir, result))
+    
+    return results
 
 def main():
     """Main entry point for the script."""
