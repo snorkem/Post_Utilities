@@ -491,7 +491,8 @@ class FileFinder:
             # Find matching files
             # Only pass first_match_only to _find_matches if we haven't found any matches yet
             should_find_first_only = first_match_only and not found_files
-            matches, subdirs_searched = self._find_matches(pattern, src_dir, should_find_first_only)
+            matches, subdirs_searched = self._find_matches(pattern, source_dirs, should_find_first_only)
+
             
             # Track directories searched
             dirs_searched.update(subdirs_searched)
@@ -508,7 +509,8 @@ class FileFinder:
                 else:
                     # Add all matches to our list
                     found_files.extend(matches)
-        
+        self.logger.debug(f"DEBUG: Directories searched: {dirs_searched}")
+        self.logger.debug(f"DEBUG: Files found: {found_files}")
         if first_match_only and len(found_files) > 1:
             self.logger.debug(f"First-match-only: Final result has {len(found_files)} matches (should be 1)")
             self.logger.debug(f"DEBUG: WARNING: Found {len(found_files)} with first_match_only enabled, keeping only first match")
@@ -544,121 +546,160 @@ class FileFinder:
         
         return found_files, pattern_found, dirs_searched
     
-    def _find_matches(self, pattern: str, src_dir: str, first_match_only: bool = False) -> Tuple[List[str], Set[str]]:
+    def _find_matches(self, pattern: str, src_dirs: Union[str, List[str]], first_match_only: bool = False) -> Tuple[List[str], Set[str]]:
         """
-        Find files matching pattern in source directory using appropriate method.
-        Enhanced with debug statements to trace directory traversal.
+        Find files matching pattern in source directories using appropriate method.
         
         Args:
             pattern: File pattern to search for
-            src_dir: Directory to search in
+            src_dirs: Directory or list of directories to search in
             first_match_only: If True, stop after finding the first match
             
         Returns:
             Tuple (list of matching files, set of directories searched)
         """
+        # Ensure src_dirs is always a list
+        if isinstance(src_dirs, str):
+            src_dirs = [src_dirs]
+        
         matches = []  # Use a list to maintain order of discovery
         dirs_searched = set()
         
-        self.logger.debug(f"Searching for '{pattern}' in {src_dir} (first_match_only={first_match_only})")
+        self.logger.debug(f"Searching for '{pattern}' in {len(src_dirs)} directories: {src_dirs}")
         
         # Debug counters
         subdirectory_count = 0
         file_count = 0
         
-        try:
-            # Ensure the source directory exists and is readable
-            if not os.path.isdir(src_dir):
-                self.logger.debug(f"Source directory does not exist: {src_dir}")
-                return matches, dirs_searched
-                
-            if not os.access(src_dir, os.R_OK):
-                self.logger.debug(f"Source directory is not readable: {src_dir}")
-                return matches, dirs_searched
-            
-            # For EDL files with case-insensitive searches
-            if not self.case_sensitive:
-                self.logger.debug(f"Using case-insensitive search for pattern: {pattern}")
-                
-                # Convert pattern to uppercase for comparison
-                upper_pattern = pattern.upper()
-                
-                # Extract base name if pattern has extension
-                base_pattern = os.path.splitext(upper_pattern)[0] if '.' in pattern else upper_pattern
-                self.logger.debug(f"Extracted base pattern: {base_pattern}")
-                
-                # Process ampersands and special characters for better matching
-                special_char_pattern = re.sub(r'[&\s\(\)\[\]\-\+\.]', '.', upper_pattern)
-                
-                # First pass: Look for all matching files
-                for root, dirs, files in os.walk(src_dir):
-                    # Track this directory
-                    dirs_searched.add(root)
-                    subdirectory_count += 1
+        # Iterate through all source directories
+        for src_dir in src_dirs:
+            try:
+                # Ensure the source directory exists and is readable
+                if not os.path.isdir(src_dir):
+                    self.logger.debug(f"Source directory does not exist: {src_dir}")
+                    continue
                     
-                    # Debug directory traversal
-                    if subdirectory_count % 20 == 0:
-                        self.logger.debug(f"Traversed {subdirectory_count} directories, current: {root}")
+                if not os.access(src_dir, os.R_OK):
+                    self.logger.debug(f"Source directory is not readable: {src_dir}")
+                    continue
+                
+                # For case-insensitive (default) search
+                if not self.case_sensitive:
+                    self.logger.debug(f"Using case-insensitive search for pattern: {pattern}")
                     
-                    for filename in files:
-                        file_count += 1
-                        full_path = os.path.join(root, filename)
+                    # Convert pattern to uppercase for comparison
+                    upper_pattern = pattern.upper()
+                    
+                    # Extract base name if pattern has extension
+                    base_pattern = os.path.splitext(upper_pattern)[0] if '.' in pattern else upper_pattern
+                    self.logger.debug(f"Extracted base pattern: {base_pattern}")
+                    
+                    # Process ampersands and special characters for better matching
+                    special_char_pattern = re.sub(r'[&\s\(\)\[\]\-\+\.]', '.', upper_pattern)
+                    
+                    # First pass: Look for all matching files
+                    for root, dirs, files in os.walk(src_dir):
+                        # Track this directory
+                        dirs_searched.add(root)
+                        subdirectory_count += 1
                         
-                        # Debug file examination
-                        if file_count % 1000 == 0:
-                            self.logger.debug(f"Examined {file_count} files")
+                        # Debug directory traversal
+                        if subdirectory_count % 20 == 0:
+                            self.logger.debug(f"Traversed {subdirectory_count} directories, current: {root}")
                         
-                        # Case-insensitive comparison with filename
-                        upper_filename = filename.upper()
-                        
-                        # 1. Check for exact match
-                        if upper_filename == upper_pattern:
-                            matches.append(full_path)
-                            self.logger.debug(f"Found exact match: {full_path}")
-                            if first_match_only:
-                                break
-                            continue
-                        
-                        # 2. Check for base name match
-                        if '.' in filename:
-                            file_base = os.path.splitext(upper_filename)[0]
-                            if file_base == base_pattern:
+                        for filename in files:
+                            file_count += 1
+                            full_path = os.path.join(root, filename)
+                            
+                            # Debug file examination
+                            if file_count % 1000 == 0:
+                                self.logger.debug(f"Examined {file_count} files")
+                            
+                            # Case-insensitive comparison with filename
+                            upper_filename = filename.upper()
+                            
+                            # 1. Check for exact match
+                            if upper_filename == upper_pattern:
                                 matches.append(full_path)
-                                self.logger.debug(f"Found base name match: {full_path}")
+                                self.logger.debug(f"Found exact match: {full_path}")
                                 if first_match_only:
                                     break
                                 continue
-                        
-                        # 3. Check for substring match (like using '*' in shell script)
-                        if upper_pattern in upper_filename or base_pattern in upper_filename:
-                            matches.append(full_path)
-                            self.logger.debug(f"Found substring match: {full_path}")
-                            if first_match_only:
-                                break
-                            continue
-                        
-                        # 4. Special handling for EDL file paths with problematic characters
-                        if '&' in pattern or ' ' in pattern or '(' in pattern or ')' in pattern:
-                            if re.search(special_char_pattern, upper_filename):
+                            
+                            # 2. Check for base name match
+                            if '.' in filename:
+                                file_base = os.path.splitext(upper_filename)[0]
+                                if file_base == base_pattern:
+                                    matches.append(full_path)
+                                    self.logger.debug(f"Found base name match: {full_path}")
+                                    if first_match_only:
+                                        break
+                                    continue
+                            
+                            # 3. Check for substring match (like using '*' in shell script)
+                            if upper_pattern in upper_filename or base_pattern in upper_filename:
                                 matches.append(full_path)
-                                self.logger.debug(f"Found special character match: {full_path}")
+                                self.logger.debug(f"Found substring match: {full_path}")
                                 if first_match_only:
                                     break
                                 continue
+                            
+                            # 4. Special handling for EDL file paths with problematic characters
+                            if '&' in pattern or ' ' in pattern or '(' in pattern or ')' in pattern:
+                                if re.search(special_char_pattern, upper_filename):
+                                    matches.append(full_path)
+                                    self.logger.debug(f"Found special character match: {full_path}")
+                                    if first_match_only:
+                                        break
+                                    continue
+                        
+                        # If we found a match and only want the first one, stop searching directories
+                        if matches and first_match_only:
+                            break
                     
-                    # If we found a match and only want the first one, stop searching directories
-                    if matches and first_match_only:
-                        break
+                    self.logger.debug(f"Case-insensitive search completed. Examined {file_count} files in {subdirectory_count} directories.")
                 
-                self.logger.debug(f"Case-insensitive search completed. Examined {file_count} files in {subdirectory_count} directories.")
-            
-            # For case-sensitive or regex searches
-            else:
-                if self.use_regex:
-                    # Regular expression matching
-                    try:
-                        regex = re.compile(pattern)
-                        self.logger.debug(f"Using regex search with pattern: {pattern}")
+                # For case-sensitive or regex searches
+                else:
+                    if self.use_regex:
+                        # Regular expression matching
+                        try:
+                            regex = re.compile(pattern)
+                            self.logger.debug(f"Using regex search with pattern: {pattern}")
+                            
+                            for root, dirs, files in os.walk(src_dir):
+                                # Track this directory
+                                dirs_searched.add(root)
+                                subdirectory_count += 1
+                                
+                                # Debug directory traversal
+                                if subdirectory_count % 20 == 0:
+                                    self.logger.debug(f"Traversed {subdirectory_count} directories, current: {root}")
+                                
+                                for filename in files:
+                                    file_count += 1
+                                    full_path = os.path.join(root, filename)
+                                    
+                                    # Debug file examination
+                                    if file_count % 1000 == 0:
+                                        self.logger.debug(f"Examined {file_count} files")
+                                    
+                                    if regex.search(filename):
+                                        matches.append(full_path)
+                                        self.logger.debug(f"Found regex match: {full_path}")
+                                        if first_match_only:
+                                            break
+                                
+                                # If we found a match and only want the first one, stop searching directories
+                                if matches and first_match_only:
+                                    break
+                            
+                            self.logger.debug(f"Regex search completed. Examined {file_count} files in {subdirectory_count} directories.")
+                        except re.error as e:
+                            self.logger.log(f"Warning: Invalid regex pattern: {pattern} - Error: {e}", console=True)
+                    else:
+                        # Glob pattern matching
+                        self.logger.debug(f"Using glob search with pattern: {pattern}")
                         
                         for root, dirs, files in os.walk(src_dir):
                             # Track this directory
@@ -677,9 +718,10 @@ class FileFinder:
                                 if file_count % 1000 == 0:
                                     self.logger.debug(f"Examined {file_count} files")
                                 
-                                if regex.search(filename):
+                                # Add wildcard behavior like the shell script
+                                if fnmatch.fnmatch(filename, pattern) or fnmatch.fnmatch(filename, pattern + "*"):
                                     matches.append(full_path)
-                                    self.logger.debug(f"Found regex match: {full_path}")
+                                    self.logger.debug(f"Found glob match: {full_path}")
                                     if first_match_only:
                                         break
                             
@@ -687,63 +729,28 @@ class FileFinder:
                             if matches and first_match_only:
                                 break
                         
-                        self.logger.debug(f"Regex search completed. Examined {file_count} files in {subdirectory_count} directories.")
-                    except re.error as e:
-                        self.logger.log(f"Warning: Invalid regex pattern: {pattern} - Error: {e}", console=True)
+                        self.logger.debug(f"Glob search completed. Examined {file_count} files in {subdirectory_count} directories.")
+                
+                # Log results
+                if matches:
+                    self.logger.debug(f"Found {len(matches)} files matching '{pattern}'")
+                    self.logger.log(f"    Found {len(matches)} files matching pattern: {pattern}", console=False)
+                    for i, match in enumerate(matches[:3]):  # Log first 3 matches
+                        self.logger.log(f"      Match {i+1}: {os.path.basename(match)}", console=False)
+                    if len(matches) > 3:
+                        self.logger.log(f"      ... and {len(matches) - 3} more", console=False)
                 else:
-                    # Glob pattern matching
-                    self.logger.debug(f"Using glob search with pattern: {pattern}")
-                    
-                    for root, dirs, files in os.walk(src_dir):
-                        # Track this directory
-                        dirs_searched.add(root)
-                        subdirectory_count += 1
-                        
-                        # Debug directory traversal
-                        if subdirectory_count % 20 == 0:
-                            self.logger.debug(f"Traversed {subdirectory_count} directories, current: {root}")
-                        
-                        for filename in files:
-                            file_count += 1
-                            full_path = os.path.join(root, filename)
-                            
-                            # Debug file examination
-                            if file_count % 1000 == 0:
-                                self.logger.debug(f"Examined {file_count} files")
-                            
-                            # Add wildcard behavior like the shell script
-                            if fnmatch.fnmatch(filename, pattern) or fnmatch.fnmatch(filename, pattern + "*"):
-                                matches.append(full_path)
-                                self.logger.debug(f"Found glob match: {full_path}")
-                                if first_match_only:
-                                    break
-                        
-                        # If we found a match and only want the first one, stop searching directories
-                        if matches and first_match_only:
-                            break
-                    
-                    self.logger.debug(f"Glob search completed. Examined {file_count} files in {subdirectory_count} directories.")
-            
-            # Log results
-            if matches:
-                self.logger.debug(f"Found {len(matches)} files matching '{pattern}'")
-                self.logger.log(f"    Found {len(matches)} files matching pattern: {pattern}", console=False)
-                for i, match in enumerate(matches[:3]):  # Log first 3 matches
-                    self.logger.log(f"      Match {i+1}: {os.path.basename(match)}", console=False)
-                if len(matches) > 3:
-                    self.logger.log(f"      ... and {len(matches) - 3} more", console=False)
-            else:
-                self.logger.debug(f"No files found matching '{pattern}'")
-                self.logger.log(f"    No matches found for pattern: {pattern}", console=False)
-            
-            self.logger.debug(f"Search statistics: Searched {len(dirs_searched)} directories, {file_count} files examined, {len(matches)} matches found")
-            
-        except Exception as e:
-            self.logger.debug(f"Error in _find_matches: {str(e)}")
-            self.logger.debug(traceback.format_exc())
-            print(f"Error searching: {e}")
-            
-        return matches, dirs_searched
+                    self.logger.debug(f"No files found matching '{pattern}'")
+                    self.logger.log(f"    No matches found for pattern: {pattern}", console=False)
+                
+                self.logger.debug(f"Search statistics: Searched {len(dirs_searched)} directories, {file_count} files examined, {len(matches)} matches found")
+                
+            except Exception as e:
+                self.logger.debug(f"Error in _find_matches: {str(e)}")
+                self.logger.debug(traceback.format_exc())
+                print(f"Error searching directory {src_dir} with error:\n{e}")
+                
+            return matches, dirs_searched
     
     def _should_exclude(self, file_path: str, exclude_patterns: List[str]) -> bool:
         """Check if a file should be excluded based on exclude patterns."""
@@ -1040,7 +1047,8 @@ class DiskSpaceChecker:
         """
         try:
             # Ensure the directory exists for checking
-            os.makedirs(dest_dir, exist_ok=True)
+            expanded_dest_dir = os.path.expanduser(dest_dir)
+            os.makedirs(expanded_dest_dir, exist_ok=True)
             
             # Get available space
             if sys.platform == 'win32':
@@ -1079,7 +1087,7 @@ class FileProcessor:
         # Core parameters
         self.source_dirs = args.source_dirs
         self.dest_dirs = args.dest_dirs  # This is now a list of destination directories
-        self.dest_dir = None  # Will be set during processing of each destination
+        #self.dest_dir = 'Test' # For reporting at this point
         self.file_list = args.file_list
         self.edl_file = args.edl_file
         self.log_file = args.log_file
@@ -1125,14 +1133,16 @@ class FileProcessor:
     
     def _validate_destination(self, dest_dir):
         """Validate a destination directory."""
+        expanded_dest_dir = os.path.expanduser(dest_dir)
+        
         # Create destination directory if it doesn't exist and not in dry run mode
-        if not self.dry_run and not os.path.isdir(dest_dir):
+        if not self.dry_run and not os.path.isdir(expanded_dest_dir):
             try:
-                os.makedirs(dest_dir)
+                os.makedirs(expanded_dest_dir)
                 self.logger.log(f"Created destination directory: {dest_dir}")
             except Exception as e:
                 raise ValueError(f"Failed to create destination directory: {dest_dir} - {str(e)}")
-        elif self.dry_run and not os.path.isdir(dest_dir):
+        elif self.dry_run and not os.path.isdir(expanded_dest_dir):
             self.logger.log(f"Note: Destination directory does not exist, but would be created in actual run: {dest_dir}")
 
     def run(self):
@@ -1143,6 +1153,10 @@ class FileProcessor:
             
             # Validate all inputs
             self._validate_inputs()
+            
+            # Initialize a set to track all unique directories searched
+            all_unique_dirs_searched = set()
+            global_missing_patterns = set()
             
             # Get file patterns to process - do this once
             if self.edl_file:
@@ -1158,9 +1172,7 @@ class FileProcessor:
             # Process each destination directory
             overall_result = 0
             for dest_idx, dest_dir in enumerate(self.dest_dirs):
-                # Set current destination
-                self.dest_dir = dest_dir
-
+                # Reset the unique source paths for each destination
                 self.unique_src_paths = set()
                 
                 # Log that we're processing this destination
@@ -1179,6 +1191,7 @@ class FileProcessor:
                 self.copied_files = 0
                 self.skipped_files = 0
                 self.existing_files = 0
+                self.missing_patterns = 0
                 
                 # Process each pattern for this destination
                 all_files_to_process = []
@@ -1209,8 +1222,10 @@ class FileProcessor:
                         
                         # Get results for this pattern
                         if pattern in pattern_to_files:
-                            found_files, pattern_found = pattern_to_files[pattern]
-                            
+                            found_files, pattern_found, dirs_searched = self.file_finder.find_file(
+                                pattern, self.source_dirs, exclude_patterns, self.max_size, self.first_match_only
+                            )
+                            all_unique_dirs_searched.update(dirs_searched)  
                             # Debug output
                             self.logger.debug(f"Pattern {pattern}: Found {len(found_files)} files, pattern_found={pattern_found}")
                             
@@ -1219,8 +1234,8 @@ class FileProcessor:
                                                    all_files_to_copy)
                     
                     # Get total directories searched from the finder
-                    all_dirs_searched = self.file_finder.dirs_searched_set
-                    self.total_dirs_searched += len(all_dirs_searched)
+                    for dir_path in self.file_finder.dirs_searched_set:
+                        all_dirs_searched.add(os.path.abspath(dir_path))
                     
                 else:
                     # Process patterns sequentially
@@ -1235,8 +1250,8 @@ class FileProcessor:
                         )
                         
                         # Add to the total directories searched
-                        all_dirs_searched.update(dirs_searched)
-                        self.total_dirs_searched += len(dirs_searched)
+                        for dir_path in dirs_searched:
+                            all_dirs_searched.add(os.path.abspath(dir_path))
                         
                         # Process found files for this destination
                         self._process_found_files(pattern, found_files, pattern_found, all_files_to_process, 
@@ -1271,7 +1286,9 @@ class FileProcessor:
                 # Update statistics
                 self.copied_files += dest_copied_files
                 self.total_bytes_copied += dest_bytes_copied
-            
+                global_missing_patterns.update(self.missing_patterns_list)
+            self.total_dirs_searched = len(all_dirs_searched)
+            self.missing_patterns = len(global_missing_patterns)
             # Calculate elapsed time
             elapsed_time = time.time() - start_time
             self.logger.debug(f"Operation completed in {elapsed_time:.2f} seconds")
@@ -1298,41 +1315,44 @@ class FileProcessor:
             self.missing_patterns += 1
             self.missing_patterns_list.append(pattern)
             return
-        
-        # Process found files
-        for src_path in found_files:
-            # Skip if this source path has already been processed
-            if src_path in self.unique_src_paths:
-                continue
+    
+        for dest_dir in self.dest_dirs:
+            expanded_dest_dir = os.path.expanduser(dest_dir)
             
-            self.unique_src_paths.add(src_path)
-            
-            filename = os.path.basename(src_path)
-            
-            # Expand any ~ in the destination path for proper resolution
-            expanded_dest_dir = os.path.expanduser(self.dest_dir)
-            dest_path = os.path.join(expanded_dest_dir, filename)
-            
-            # Add file to processing list
-            all_files.append((src_path, dest_path))
-            
-            # Check if file already exists in destination - use absolute paths
-            if not os.path.exists(os.path.abspath(dest_path)):
-                files_to_copy.append((src_path, dest_path))
-                self.logger.debug(f"Will copy: {src_path} -> {dest_path}")
-            else:
-                self.existing_files += 1
-                self.logger.log_existing(filename)
-                self.logger.debug(f"File already exists: {dest_path}")
+            # Process found files
+            for src_path in found_files:
+                # Skip if this source path has already been processed
+                if src_path in self.unique_src_paths:
+                    continue
+                
+                # self.unique_src_paths.add(src_path)
+                
+                filename = os.path.basename(src_path)
+                
+                dest_path = os.path.join(expanded_dest_dir, filename)
+                
+                # Add file to processing list
+                all_files.append((src_path, dest_path))
+                
+                # Check if file already exists in destination - use absolute paths
+                if not os.path.exists(os.path.abspath(dest_path)):
+                    files_to_copy.append((src_path, dest_path))
+                    self.logger.debug(f"Will copy: {src_path} -> {dest_path}")
+                else:
+                    self.existing_files += 1
+                    self.logger.log_existing(filename)
+                    self.logger.debug(f"File already exists: {dest_path}")
     
     def _validate_inputs(self):
         """Validate all input parameters."""
         # Check source directories
         for src_dir in self.source_dirs:
-            if not os.path.isdir(src_dir):
+            # Ensure paths are expanded and absolute for validation
+            expanded_src_dir = os.path.abspath(src_dir)
+            if not os.path.isdir(expanded_src_dir):
                 raise ValueError(f"Source directory does not exist: {src_dir}")
             
-            if not os.access(src_dir, os.R_OK):
+            if not os.access(expanded_src_dir, os.R_OK):
                 raise ValueError(f"Source directory is not readable: {src_dir}")
         
         # Check destination directories
@@ -1340,13 +1360,13 @@ class FileProcessor:
             raise ValueError("No destination directories specified")
         
         for dest_dir in self.dest_dirs:
+            # Ensure paths are expanded for validation
+            expanded_dest_dir = os.path.abspath(os.path.expanduser(dest_dir))
+            
             # Check if destination paths are valid
             try:
-                # Get absolute path to catch any path syntax errors
-                dest_path = os.path.abspath(dest_dir)
-                
                 # Check if path is too long
-                if len(dest_path) > 260:  # Maximum path length on Windows
+                if len(expanded_dest_dir) > 260:  # Maximum path length on Windows
                     self.logger.log(f"Warning: Destination path may be too long: {dest_dir}")
             except Exception as e:
                 raise ValueError(f"Invalid destination directory path: {dest_dir} - {str(e)}")
@@ -1430,7 +1450,6 @@ class FileProcessor:
         """Log initial information about the copy operation."""
         self.logger.log("======================================================")
         self.logger.log(f"Source Directories: {', '.join(self.source_dirs)}")
-        self.logger.log(f"Destination Directory: {self.dest_dir}")
         
         if self.edl_file:
             self.logger.log(f"EDL File: {self.edl_file}")
@@ -1639,8 +1658,8 @@ def parse_arguments():
     args = parser.parse_args()
     
     # Process source directories
-    args.source_dirs = [d.strip() for d in args.source_dirs.split(',')]
-    args.dest_dirs = [d.strip() for d in args.dest_dirs.split(',')]
+    args.source_dirs = [os.path.expanduser(d.strip()) for d in args.source_dirs.split(',')]
+    args.dest_dirs = [os.path.expanduser(d.strip()) for d in args.dest_dirs.split(',')]
     
     return args
 
