@@ -248,13 +248,13 @@ class LowerThirdsGUI(QMainWindow):
         
         # Letter spacing
         self.letter_spacing = QSpinBox()
-        self.letter_spacing.setRange(0, 100)
+        self.letter_spacing.setRange(-100, 100)
         self.letter_spacing.setValue(0)
         text_effects_layout.addRow("Letter Spacing (px):", self.letter_spacing)
         
         # Vertical spacing
         self.vertical_spacing = QSpinBox()
-        self.vertical_spacing.setRange(0, 100)
+        self.vertical_spacing.setRange(-100, 100)
         self.vertical_spacing.setValue(0)
         text_effects_layout.addRow("Vertical Spacing (px):", self.vertical_spacing)
         
@@ -436,10 +436,10 @@ class LowerThirdsGUI(QMainWindow):
         if self.text_outline.text():
             args.append(f"--text-outline={self.text_outline.text()}")
             
-        if self.letter_spacing.value() > 0:
+        if self.letter_spacing.value() != 0:
             args.append(f"--letter-spacing={self.letter_spacing.value()}")
             
-        if self.vertical_spacing.value() > 0:
+        if self.vertical_spacing.value() != 0:
             args.append(f"--vertical-spacing={self.vertical_spacing.value()}")
             
         if self.text_transform.currentText() != "none":
