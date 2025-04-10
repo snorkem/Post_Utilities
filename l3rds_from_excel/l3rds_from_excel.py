@@ -492,7 +492,12 @@ def generate_lower_third(row, output_dir=None, width=1920, height=1080,
                 if debug:
                     print(f"DEBUG: Error parsing Main Font Size: {e}")
             break
-    
+
+    if vertical_spacing is not None:
+        vert_spacing = vertical_spacing
+    else:
+        vert_spacing = main_font_size // 2
+
     # Check for secondary font size
     for col in column_names:
         if col.strip() == 'Secondary Font Size' and pd.notna(row[col]):
@@ -626,12 +631,6 @@ def generate_lower_third(row, output_dir=None, width=1920, height=1080,
         fill=bar_color
     )
     
-    # Compute vertical spacing between main and secondary text
-    if vertical_spacing is not None:
-        vert_spacing = vertical_spacing
-    else:
-        vert_spacing = main_font_size // 2
-    
     # Process extended justification options
     # Normalize justification value and extract position information
     justification = justification.lower().strip()
@@ -678,8 +677,15 @@ def generate_lower_third(row, output_dir=None, width=1920, height=1080,
     # Apply letter spacing if specified - this is not fully accurate for variable-width fonts
     # but provides a reasonable approximation
     if letter_spacing != 0:
-        spaced_main_text = " ".join(main_text)
-        spaced_secondary_text = " ".join(secondary_text)
+        if letter_spacing > 0:
+            # Positive spacing: add spaces between characters
+            spaced_main_text = " ".join(main_text)
+            spaced_secondary_text = " ".join(secondary_text)
+        else:
+            # Negative spacing: we'll handle this directly in the text drawing
+            # Keep original text but adjust positions when drawing
+            spaced_main_text = main_text
+            spaced_secondary_text = secondary_text
         
         # Recalculate text dimensions with spacing
         main_bbox = draw.textbbox((0, 0), spaced_main_text, font=main_font)
@@ -808,21 +814,40 @@ def generate_lower_third(row, output_dir=None, width=1920, height=1080,
         except Exception as e:
             print(f"Warning: Error applying text shadow: {e}")
     
-    # Draw the main text on the text layer
-    text_draw.text(
-        (main_x, main_y),
-        spaced_main_text,
-        font=main_font,
-        fill=text_color
-    )
+    if letter_spacing < 0 and len(main_text) > 1:
+        # Handle negative letter spacing by drawing each character individually
+        x_pos = main_x
+        for char in main_text:
+            text_draw.text((x_pos, main_y), char, font=main_font, fill=text_color)
+            char_bbox = text_draw.textbbox((0, 0), char, font=main_font)
+            char_width = char_bbox[2] - char_bbox[0]
+            x_pos += char_width + letter_spacing  # Add negative spacing
+    else:
+        # Normal text drawing for positive or zero spacing
+        text_draw.text(
+            (main_x, main_y),
+            spaced_main_text,
+            font=main_font,
+            fill=text_color
+        )
     
     # Draw the secondary text on the text layer
-    text_draw.text(
-        (secondary_x, secondary_y),
-        spaced_secondary_text,
-        font=secondary_font,
-        fill=secondary_text_color
-    )
+    if letter_spacing < 0 and len(secondary_text) > 1:
+        # Handle negative letter spacing by drawing each character individually
+        x_pos = secondary_x
+        for char in secondary_text:
+            text_draw.text((x_pos, secondary_y), char, font=secondary_font, fill=secondary_text_color)
+            char_bbox = text_draw.textbbox((0, 0), char, font=secondary_font)
+            char_width = char_bbox[2] - char_bbox[0]
+            x_pos += char_width + letter_spacing  # Add negative spacing
+    else:
+        # Normal text drawing for positive or zero spacing
+        text_draw.text(
+            (secondary_x, secondary_y),
+            spaced_secondary_text,
+            font=secondary_font,
+            fill=secondary_text_color
+        )
     
     # Composite the text layer with the original image
     # Make sure both images are in RGBA mode before alpha compositing
@@ -905,7 +930,7 @@ def show_preview(image):
     print("Close the preview window/application when done to continue.")
     
     # Wait for user input before proceeding
-    input("Press Enter to continue...")
+    input("Press Enter to continue...") if os.environ.get("GUI_MODE", "0") != "1" else None
     
     # Try to clean up the temporary file (might fail if still open)
     try:
