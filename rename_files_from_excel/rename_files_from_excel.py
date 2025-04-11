@@ -50,9 +50,10 @@ def parse_arguments():
                         default='renames.log',
                         help='Path to log file')
     
-    parser.add_argument('--recursive', 
-                        action='store_true',
-                        help='Search for files recursively in subdirectories')
+    parser.add_argument('--non-recursive', 
+                        action='store_false',
+                        dest='recursive',
+                        help='Disable recursive search in subdirectories (default: recursive search enabled)')
     
     return parser.parse_args()
 
