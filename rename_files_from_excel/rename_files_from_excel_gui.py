@@ -8,10 +8,11 @@ import threading
 import traceback
 import subprocess
 import datetime
+import shutil
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QLineEdit, QPushButton, QListWidget, QTextEdit, 
                             QGroupBox, QGridLayout, QFileDialog, QMessageBox, QStatusBar,
-                            QScrollArea)
+                            QScrollArea, QCheckBox)
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot
 
 
@@ -56,6 +57,11 @@ class FileRenamerApp(QMainWindow):
         # File and directory paths
         self.excel_path = ""
         self.target_dirs = []
+        
+        # Processing options
+        self.recursive_search = True
+        self.force_overwrite = False
+        self.dry_run = False
         
         # Setup logger
         self.logger = self.setup_logger()
@@ -178,6 +184,24 @@ class FileRenamerApp(QMainWindow):
         
         main_layout.addWidget(config_frame)
         
+        # Options section
+        options_frame = QGroupBox("Options")
+        options_layout = QVBoxLayout(options_frame)
+        
+        self.recursive_checkbox = QCheckBox("Search files recursively in subdirectories")
+        self.recursive_checkbox.setChecked(self.recursive_search)
+        options_layout.addWidget(self.recursive_checkbox)
+        
+        self.force_checkbox = QCheckBox("Force overwrite (create backup of existing destination files)")
+        self.force_checkbox.setChecked(self.force_overwrite)
+        options_layout.addWidget(self.force_checkbox)
+        
+        self.dry_run_checkbox = QCheckBox("Dry run (show what would be renamed without making changes)")
+        self.dry_run_checkbox.setChecked(self.dry_run)
+        options_layout.addWidget(self.dry_run_checkbox)
+        
+        main_layout.addWidget(options_frame)
+        
         # Action buttons
         button_frame = QWidget()
         button_layout = QHBoxLayout(button_frame)
@@ -235,7 +259,7 @@ class FileRenamerApp(QMainWindow):
                 self.dir_entry.setText(dir_path)
                 self.status_bar.showMessage(f"Directory selected: {dir_path}")
         
-        except Exception as e:
+        except Exception as e: 
             error_msg = f"Error browsing for directory: {str(e)}"
             self.logger.error(error_msg)
             QMessageBox.critical(self, "Error", f"Could not browse for directory: {str(e)}")
@@ -300,6 +324,27 @@ class FileRenamerApp(QMainWindow):
             
         self.status_bar.showMessage("Directory removed")
     
+    def check_single_sheet(self, excel_file):
+        """Check if the Excel file contains only a single sheet."""
+        try:
+            # Use pandas ExcelFile to get sheet names
+            xls = pd.ExcelFile(excel_file)
+            sheet_names = xls.sheet_names
+            
+            if len(sheet_names) > 1:
+                error_msg = f"Excel file contains multiple sheets: {', '.join(sheet_names)}. Only single-sheet files are supported."
+                print(error_msg)
+                self.logger.error(error_msg)
+                return False, sheet_names[0]
+            
+            return True, sheet_names[0]
+            
+        except Exception as e:
+            error_msg = f"Error checking Excel sheets: {str(e)}"
+            print(error_msg)
+            self.logger.error(error_msg)
+            return False, None
+    
     def validate_inputs(self):
         """Validate all user inputs before running the renaming process."""
         excel_path = self.excel_path_edit.text()
@@ -314,6 +359,12 @@ class FileRenamerApp(QMainWindow):
             
         if not os.path.exists(excel_path):
             QMessageBox.critical(self, "Input Error", "The specified Excel file does not exist.")
+            return False
+            
+        # Check if Excel has only one sheet
+        single_sheet, sheet_name = self.check_single_sheet(excel_path)
+        if not single_sheet:
+            QMessageBox.critical(self, "Excel Error", "This tool only supports Excel files with a single sheet.")
             return False
             
         if not self.target_dirs:
@@ -341,6 +392,9 @@ class FileRenamerApp(QMainWindow):
         self.proxy_name_col = self.proxy_col_edit.text()
         self.master_suffix = self.suffix_edit.text()
         self.excel_path = self.excel_path_edit.text()
+        self.recursive_search = self.recursive_checkbox.isChecked()
+        self.force_overwrite = self.force_checkbox.isChecked()
+        self.dry_run = self.dry_run_checkbox.isChecked()
             
         # Disable UI during processing
         self.disable_ui()
@@ -362,6 +416,9 @@ class FileRenamerApp(QMainWindow):
         for child in central_widget.findChildren(QLineEdit):
             child.setEnabled(False)
             
+        for child in central_widget.findChildren(QCheckBox):
+            child.setEnabled(False)
+            
         self.dir_listbox.setEnabled(False)
         self.status_bar.showMessage("Processing... Please wait.")
     
@@ -374,6 +431,9 @@ class FileRenamerApp(QMainWindow):
         for child in central_widget.findChildren(QLineEdit):
             child.setEnabled(True)
             
+        for child in central_widget.findChildren(QCheckBox):
+            child.setEnabled(True)
+            
         self.dir_listbox.setEnabled(True)
         self.status_bar.showMessage("Ready")
     
@@ -381,11 +441,14 @@ class FileRenamerApp(QMainWindow):
         """Main file renaming process."""
         try:
             # Get configuration values
-            excel_file = Path(self.excel_path)
-            target_dirs = [Path(dir_path) for dir_path in self.target_dirs]
+            excel_file = Path(os.path.abspath(self.excel_path))
+            target_dirs = [Path(os.path.abspath(dir_path)) for dir_path in self.target_dirs]
             master_col = self.master_name_col
             proxy_col = self.proxy_name_col
             suffix = self.master_suffix
+            recursive = self.recursive_search
+            force = self.force_overwrite
+            dry_run = self.dry_run
             
             # Clear console
             self.console.clear()
@@ -396,12 +459,25 @@ class FileRenamerApp(QMainWindow):
             print(f"Master column: {master_col}")
             print(f"Proxy column: {proxy_col}")
             print(f"Suffix: {suffix}")
+            print(f"Recursive search: {recursive}")
+            print(f"Force overwrite: {force}")
+            print(f"Dry run: {dry_run}")
             print("-" * 50)
+            
+            # Log the configuration
+            self.logger.info("Configuration: excel=%s, dirs=%s, master_col=%s, proxy_col=%s, "
+                           "suffix=%s, recursive=%s, force=%s, dry_run=%s",
+                           excel_file, target_dirs, master_col, proxy_col,
+                           suffix, recursive, force, dry_run)
             
             # Read Excel file
             try:
-                df = pd.read_excel(excel_file)
-                print(f"Successfully read Excel file with {len(df)} rows")
+                # Get sheet name first
+                _, sheet_name = self.check_single_sheet(excel_file)
+                
+                df = pd.read_excel(excel_file, sheet_name=0)  # Always use first sheet
+                print(f"Successfully read Excel file with {len(df)} rows from sheet '{sheet_name}'")
+                self.logger.info(f"Successfully read Excel file with {len(df)} rows from sheet '{sheet_name}'")
             except Exception as e:
                 print(f"Error reading Excel file: {str(e)}")
                 self.logger.error(f"Error reading Excel file: {str(e)}")
@@ -412,8 +488,18 @@ class FileRenamerApp(QMainWindow):
                 return
                 
             # Verify required columns exist
-            if master_col not in df.columns or proxy_col not in df.columns:
-                error_msg = f"Required columns not found. Need '{master_col}' and '{proxy_col}'"
+            if master_col not in df.columns:
+                error_msg = f"Required column not found: '{master_col}'"
+                print(error_msg)
+                self.logger.error(error_msg)
+                QApplication.instance().processEvents()  # Process pending events
+                QMessageBox.critical(self, "Column Error", error_msg)
+                QApplication.instance().processEvents()  # Process pending events
+                self.enable_ui()
+                return
+                
+            if proxy_col not in df.columns:
+                error_msg = f"Required column not found: '{proxy_col}'"
                 print(error_msg)
                 self.logger.error(error_msg)
                 QApplication.instance().processEvents()  # Process pending events
@@ -470,22 +556,34 @@ class FileRenamerApp(QMainWindow):
             files_to_rename = []
             for target_dir in target_dirs:
                 print(f"Collecting files from: {target_dir}")
-                dir_files = self.collect_files_recursively(target_dir)
+                dir_files = self.collect_files_recursively(target_dir, recursive)
                 files_to_rename.extend(dir_files)
                 print(f"Found {len(dir_files)} files in {target_dir}")
             
             print(f"Total files collected from all directories: {len(files_to_rename)}")
+            
+            if not files_to_rename:
+                print("No files found to rename.")
+                self.logger.info("No files found to rename.")
+                QApplication.instance().processEvents()  # Process pending events
+                QMessageBox.information(self, "No Files", "No files found to rename in the specified directories.")
+                QApplication.instance().processEvents()  # Process pending events
+                self.enable_ui()
+                return
             
             # Perform renaming
             renamed = self.rename_files_efficiently(
                 files_to_rename, 
                 master_file_names, 
                 proxy_names, 
-                suffix
+                suffix,
+                force,
+                dry_run
             )
             
             # Show completion message
-            completion_msg = f"Successfully renamed {renamed} files out of {len(files_to_rename)} files processed."
+            dry_run_prefix = "Dry run - " if dry_run else ""
+            completion_msg = f"{dry_run_prefix}Successfully {'' if dry_run else ''}renamed {renamed} files out of {len(files_to_rename)} files processed."
             print(completion_msg)
             print("See 'renames.log' for complete details.")
             self.logger.info(completion_msg)
@@ -534,7 +632,7 @@ class FileRenamerApp(QMainWindow):
             self.logger.error(error_msg)
             return False
     
-    def collect_files_recursively(self, directory):
+    def collect_files_recursively(self, directory, recursive=True):
         """Recursively collect all non-hidden files from directory and subdirectories."""
         files_list = []
         
@@ -547,9 +645,17 @@ class FileRenamerApp(QMainWindow):
         print(f"Target is directory: {directory}. Collecting files...")
         
         try:
-            for path in directory.rglob('*'):
-                if path.is_file() and not path.name.startswith('.'):
-                    files_list.append(path)
+            if recursive:
+                # Use rglob for recursive search
+                for path in directory.rglob('*'):
+                    if path.is_file() and not path.name.startswith('.'):
+                        files_list.append(path)
+            else:
+                # Use iterdir for non-recursive search
+                for path in directory.iterdir():
+                    if path.is_file() and not path.name.startswith('.'):
+                        files_list.append(path)
+                        
         except Exception as e:
             error_msg = f"Error collecting files from {directory}: {str(e)}"
             print(error_msg)
@@ -557,7 +663,7 @@ class FileRenamerApp(QMainWindow):
         
         return files_list
     
-    def rename_files_efficiently(self, target_files, master_names, proxy_names, suffix):
+    def rename_files_efficiently(self, target_files, master_names, proxy_names, suffix, force=False, dry_run=False):
         """Rename files using an efficient lookup approach."""
         # Create a lookup dictionary for faster access
         rename_map = {}
@@ -581,25 +687,38 @@ class FileRenamerApp(QMainWindow):
                 try:
                     # Check if destination exists
                     if new_path.exists():
-                        print(f"Skipping {file_path} - destination already exists: {new_path}")
-                        self.logger.warning(f"Skipping rename - destination exists: {new_path}")
-                        skipped_count += 1
-                        continue
-                        
-                    # Perform rename
-                    file_path.rename(new_path)
-                    print(f"Renamed: {file_path.name} -> {new_path.name}")
-                    self.logger.info(f"Renamed: {file_path} -> {new_path}")
-                    rename_count += 1
+                        if force and not dry_run:
+                            # If force flag is true, create a backup before overwriting
+                            backup_path = new_path.with_name(f"{new_path.stem}_backup_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}{new_path.suffix}")
+                            shutil.copy2(new_path, backup_path)
+                            print(f"Backed up existing file to: {backup_path}")
+                            self.logger.info(f"Backed up existing file: {new_path} -> {backup_path}")
+                        else:
+                            print(f"Skipping {file_path} - destination already exists: {new_path}")
+                            self.logger.warning(f"Skipping rename - destination exists: {new_path}")
+                            skipped_count += 1
+                            continue
+                    
+                    # Perform rename or simulate it
+                    if dry_run:
+                        print(f"Would rename: {file_path.name} -> {new_name}")
+                        self.logger.info(f"Dry run: would rename {file_path} -> {new_path}")
+                        rename_count += 1
+                    else:
+                        file_path.rename(new_path)
+                        print(f"Renamed: {file_path.name} -> {new_path.name}")
+                        self.logger.info(f"Renamed: {file_path} -> {new_path}")
+                        rename_count += 1
                     
                 except Exception as e:
-                    error_msg = f"Error renaming {file_path}: {str(e)}"
+                    error_msg = f"Error processing {file_path}: {str(e)}"
                     print(error_msg)
                     self.logger.error(error_msg)
                     errors_count += 1
         
-        summary = (f"Summary: {rename_count} files renamed, {skipped_count} skipped "
-                  f"(destinations exist), {errors_count} errors")
+        dry_run_prefix = "Dry run - " if dry_run else ""
+        summary = (f"{dry_run_prefix}Summary: {rename_count} files {'would be ' if dry_run else ''}renamed, "
+                  f"{skipped_count} skipped (destinations exist), {errors_count} errors")
         print(summary)
         self.logger.info(summary)
         
