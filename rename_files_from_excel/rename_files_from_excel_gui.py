@@ -4,58 +4,68 @@ import re
 import logging
 import pandas as pd
 from pathlib import Path
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
 import threading
 import traceback
 import subprocess
 import datetime
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                            QLabel, QLineEdit, QPushButton, QListWidget, QTextEdit, 
+                            QGroupBox, QGridLayout, QFileDialog, QMessageBox, QStatusBar,
+                            QScrollArea)
+from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot
 
 
-class RedirectText:
-    """Class to redirect stdout to a tkinter Text widget."""
+class TextRedirector(QObject):
+    """Class to redirect stdout to a QTextEdit widget."""
+    text_written = pyqtSignal(str)
+    
     def __init__(self, text_widget):
+        super().__init__()
         self.text_widget = text_widget
+        self.text_written.connect(self.update_text)
         self.buffer = ""
-
+        
     def write(self, string):
         self.buffer += string
-        self.text_widget.configure(state="normal")
-        self.text_widget.insert(tk.END, string)
-        self.text_widget.see(tk.END)
-        self.text_widget.configure(state="disabled")
-
+        self.text_written.emit(string)
+        
     def flush(self):
         pass
+        
+    @pyqtSlot(str)
+    def update_text(self, text):
+        self.text_widget.moveCursor(self.text_widget.textCursor().End)
+        self.text_widget.insertPlainText(text)
+        self.text_widget.ensureCursorVisible()
 
 
-class FileRenamerApp:
+class FileRenamerApp(QMainWindow):
     """GUI application for renaming files based on Excel data."""
     
-    def __init__(self, root):
-        self.root = root
-        self.root.title("File Renamer Tool")
-        self.root.geometry("800x1200")
-        self.root.minsize(800, 1000)
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("File Renamer Tool")
+        self.setMinimumSize(800, 800)
+        self.resize(800, 1200)
         
         # Column names in Excel
-        self.master_name_col = tk.StringVar(value="Master Original Name")
-        self.proxy_name_col = tk.StringVar(value="Avid Proxy Name")
-        self.master_suffix = tk.StringVar(value="_M")
+        self.master_name_col = "Master Original Name"
+        self.proxy_name_col = "Avid Proxy Name"
+        self.master_suffix = "_M"
         
         # File and directory paths
-        self.excel_path = tk.StringVar()
+        self.excel_path = ""
         self.target_dirs = []
         
         # Setup logger
         self.logger = self.setup_logger()
         
         # Create UI components
-        self.create_widgets()
+        self.init_ui()
         
         # Store backup of stdout for redirection
         self.stdout_backup = sys.stdout
-        
+    
     def setup_logger(self, logname='renames.log'):
         """Set up and return a logger with appropriate configuration."""
         # Store the log file path as an instance variable for easy access
@@ -70,242 +80,165 @@ class FileRenamerApp:
         )
         return logging.getLogger('File Renamer Tool')
     
-    def create_widgets(self):
-        """Create all UI components."""
-        # Main frame with padding
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+    def init_ui(self):
+        """Initialize the user interface."""
+        # Create central widget and main layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
         
         # Brief explanation at the top
-        explanation_frame = ttk.Frame(main_frame)
-        explanation_frame.pack(fill=tk.X, padx=5, pady=5)
+        explanation_frame = QGroupBox()
+        explanation_layout = QVBoxLayout(explanation_frame)
         explanation_text = "This tool renames files based on an Excel spreadsheet. It looks for files with names matching the 'Master Original Name' column\nand renames them to the corresponding name in the 'Avid Proxy Name' column, adding the suffix at the end."
-        ttk.Label(explanation_frame, text=explanation_text, justify=tk.LEFT).pack(anchor=tk.W)
+        explanation_label = QLabel(explanation_text)
+        explanation_label.setAlignment(Qt.AlignLeft)
+        explanation_layout.addWidget(explanation_label)
+        main_layout.addWidget(explanation_frame)
         
         # Excel file selection section
-        excel_frame = ttk.LabelFrame(main_frame, text="Excel File Selection", padding="5")
-        excel_frame.pack(fill=tk.X, padx=5, pady=5)
+        excel_frame = QGroupBox("Excel File Selection")
+        excel_layout = QGridLayout(excel_frame)
         
-        ttk.Label(excel_frame, text="Excel File:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Entry(excel_frame, textvariable=self.excel_path, width=50).grid(row=0, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
+        excel_label = QLabel("Excel File:")
+        excel_layout.addWidget(excel_label, 0, 0)
         
-        # Replace "Open Explorer" with "Browse..." button that uses our new function
-        ttk.Button(excel_frame, text="Browse...", command=self.browse_excel_file).grid(row=0, column=2, padx=5, pady=5)
+        self.excel_path_edit = QLineEdit()
+        excel_layout.addWidget(self.excel_path_edit, 0, 1)
+        
+        excel_browse_btn = QPushButton("Browse...")
+        excel_browse_btn.clicked.connect(self.browse_excel_file)
+        excel_layout.addWidget(excel_browse_btn, 0, 2)
+        
+        main_layout.addWidget(excel_frame)
         
         # Directory selection section
-        dir_frame = ttk.LabelFrame(main_frame, text="Target Directories", padding="5")
-        dir_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        dir_frame = QGroupBox("Target Directories")
+        dir_layout = QVBoxLayout(dir_frame)
         
-        dir_button_frame = ttk.Frame(dir_frame)
-        dir_button_frame.pack(fill=tk.X)
+        dir_button_frame = QWidget()
+        dir_button_layout = QHBoxLayout(dir_button_frame)
         
-        # Text entry for new directory
-        ttk.Label(dir_button_frame, text="Directory:").pack(side=tk.LEFT, padx=5, pady=5)
-        self.dir_entry = ttk.Entry(dir_button_frame, width=40)
-        self.dir_entry.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.X, expand=True)
+        dir_label = QLabel("Directory:")
+        dir_button_layout.addWidget(dir_label)
         
-        ttk.Button(dir_button_frame, text="Browse...", command=self.browse_directory).pack(side=tk.LEFT, padx=5, pady=5)
-        ttk.Button(dir_button_frame, text="Add Directory", command=self.add_directory).pack(side=tk.LEFT, padx=5, pady=5)
-        ttk.Button(dir_button_frame, text="Remove Selected", command=self.remove_directory).pack(side=tk.LEFT, padx=5, pady=5)
+        self.dir_entry = QLineEdit()
+        dir_button_layout.addWidget(self.dir_entry)
         
-        # Directory listbox with scrollbar
-        self.dir_listbox_frame = ttk.Frame(dir_frame)
-        self.dir_listbox_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        dir_browse_btn = QPushButton("Browse...")
+        dir_browse_btn.clicked.connect(self.browse_directory)
+        dir_button_layout.addWidget(dir_browse_btn)
         
-        scrollbar = ttk.Scrollbar(self.dir_listbox_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        add_dir_btn = QPushButton("Add Directory")
+        add_dir_btn.clicked.connect(self.add_directory)
+        dir_button_layout.addWidget(add_dir_btn)
         
-        self.dir_listbox = tk.Listbox(self.dir_listbox_frame)
-        self.dir_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        remove_dir_btn = QPushButton("Remove Selected")
+        remove_dir_btn.clicked.connect(self.remove_directory)
+        dir_button_layout.addWidget(remove_dir_btn)
         
-        self.dir_listbox.config(yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.dir_listbox.yview)
+        dir_layout.addWidget(dir_button_frame)
+        
+        # Directory listbox
+        self.dir_listbox = QListWidget()
+        dir_layout.addWidget(self.dir_listbox)
+        
+        main_layout.addWidget(dir_frame)
         
         # Excel column configuration section
-        config_frame = ttk.LabelFrame(main_frame, text="Excel Configuration", padding="5")
-        config_frame.pack(fill=tk.X, padx=5, pady=5)
+        config_frame = QGroupBox("Excel Configuration")
+        config_layout = QGridLayout(config_frame)
         
-        ttk.Label(config_frame, text="Master Original Name Column:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Entry(config_frame, textvariable=self.master_name_col).grid(row=0, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
-        ttk.Label(config_frame, text="(Column containing original filenames to search for)").grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
+        master_label = QLabel("Master Original Name Column:")
+        config_layout.addWidget(master_label, 0, 0)
         
-        ttk.Label(config_frame, text="Avid Proxy Name Column:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Entry(config_frame, textvariable=self.proxy_name_col).grid(row=1, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
-        ttk.Label(config_frame, text="(Column containing new filenames to rename to)").grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
+        self.master_col_edit = QLineEdit(self.master_name_col)
+        config_layout.addWidget(self.master_col_edit, 0, 1)
         
-        ttk.Label(config_frame, text="Master File Suffix:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Entry(config_frame, textvariable=self.master_suffix).grid(row=2, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
-        ttk.Label(config_frame, text="(Added to the end of each renamed file)").grid(row=2, column=2, sticky=tk.W, padx=5, pady=5)
+        master_desc = QLabel("(Column containing original filenames to search for)")
+        config_layout.addWidget(master_desc, 0, 2)
+        
+        proxy_label = QLabel("Avid Proxy Name Column:")
+        config_layout.addWidget(proxy_label, 1, 0)
+        
+        self.proxy_col_edit = QLineEdit(self.proxy_name_col)
+        config_layout.addWidget(self.proxy_col_edit, 1, 1)
+        
+        proxy_desc = QLabel("(Column containing new filenames to rename to)")
+        config_layout.addWidget(proxy_desc, 1, 2)
+        
+        suffix_label = QLabel("Master File Suffix:")
+        config_layout.addWidget(suffix_label, 2, 0)
+        
+        self.suffix_edit = QLineEdit(self.master_suffix)
+        config_layout.addWidget(self.suffix_edit, 2, 1)
+        
+        suffix_desc = QLabel("(Added to the end of each renamed file)")
+        config_layout.addWidget(suffix_desc, 2, 2)
+        
+        main_layout.addWidget(config_frame)
         
         # Action buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, padx=5, pady=10)
+        button_frame = QWidget()
+        button_layout = QHBoxLayout(button_frame)
         
-        # Define a style for the rename button to make it prominent
-        style = ttk.Style()
-        style.configure("Rename.TButton", font=("Helvetica", 12, "bold"))
+        log_button = QPushButton("View Log File")
+        log_button.clicked.connect(self.open_log_file)
+        button_layout.addWidget(log_button)
         
-        # Log button
-        log_button = ttk.Button(button_frame, text="View Log File", command=self.open_log_file)
-        log_button.pack(side=tk.LEFT, padx=5, pady=5)
+        button_layout.addStretch()
         
-        # Rename button - make it very prominent
-        rename_button = ttk.Button(button_frame, text="RENAME FILES", command=self.start_renaming, style="Rename.TButton")
-        rename_button.pack(side=tk.RIGHT, padx=5, pady=5)
+        rename_button = QPushButton("RENAME FILES")
+        rename_button.setStyleSheet("font-weight: bold; font-size: 14px;")
+        rename_button.clicked.connect(self.start_renaming)
+        button_layout.addWidget(rename_button)
+        
+        main_layout.addWidget(button_frame)
         
         # Output console
-        console_frame = ttk.LabelFrame(main_frame, text="Console Output", padding="5")
-        console_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        console_frame = QGroupBox("Console Output")
+        console_layout = QVBoxLayout(console_frame)
         
-        self.console = scrolledtext.ScrolledText(console_frame, state="disabled", wrap=tk.WORD)
-        self.console.pack(fill=tk.BOTH, expand=True)
+        self.console = QTextEdit()
+        self.console.setReadOnly(True)
+        console_layout.addWidget(self.console)
+        
+        main_layout.addWidget(console_frame)
         
         # Status bar
-        self.status_var = tk.StringVar(value="Ready")
-        status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # Configure grid weights
-        config_frame.columnconfigure(1, weight=1)
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Ready")
     
     def browse_excel_file(self):
-        """Browse for Excel file and return the path to the text field."""
+        """Browse for Excel file and update the path field."""
         try:
-            # Instead of using tkinter's filedialog directly, use subprocess to call system commands
-            # This approach is more reliable on various platforms
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")
             
-            # Create a temporary file to store the selected path
-            temp_file = "selected_path.tmp"
-            
-            if sys.platform == "win32":
-                # Windows PowerShell approach
-                ps_script = (
-                    "$f = New-Object System.Windows.Forms.OpenFileDialog; "
-                    "$f.Filter = 'Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls'; "  # Removed 'All Files' option
-                    "$f.ShowDialog(); "
-                    "if ($f.FileName) { $f.FileName | Out-File -FilePath '" + temp_file + "' }"
-                )
-                subprocess.run(["powershell", "-Command", ps_script], shell=True)
-            
-            elif sys.platform == "darwin":
-                # macOS approach using osascript (AppleScript)
-                script = (
-                    'tell application "System Events"\n'
-                    '   activate\n'
-                    '   set fileTypes to {"xlsx", "xls"}\n'
-                    '   set filePath to choose file with prompt "Select Excel File" of type fileTypes\n'
-                    '   set filePath to POSIX path of filePath\n'
-                    'end tell\n'
-                    f'do shell script "echo " & quoted form of filePath & " > {temp_file}"'
-                )
-                subprocess.run(["osascript", "-e", script])
-            
-            else:
-                # Linux approach using zenity or similar
-                try:
-                    result = subprocess.run(
-                        ["zenity", "--file-selection", "--title=Select Excel File", "--file-filter=Excel files | *.xlsx *.xls"],
-                        capture_output=True, text=True
-                    )
-                    if result.returncode == 0 and result.stdout:
-                        with open(temp_file, "w") as f:
-                            f.write(result.stdout.strip())
-                except FileNotFoundError:
-                    # If zenity is not available
-                    messagebox.showinfo("Not Available", 
-                                       "File browser not available. Please enter the path manually.")
-                    return
-            
-            # Read the selected path from the temporary file
-            if os.path.exists(temp_file):
-                with open(temp_file, "r") as f:
-                    file_path = f.read().strip()
-                
-                # Remove the temporary file
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-                
-                # Update the text field if a path was selected
-                if file_path:
-                    # Verify the file has an Excel extension
-                    if file_path.lower().endswith(('.xlsx', '.xls')):
-                        self.excel_path.set(file_path)
-                        self.status_var.set(f"Excel file selected: {os.path.basename(file_path)}")
-                    else:
-                        messagebox.showerror("Invalid File Type", 
-                                            "Please select an Excel file (.xlsx or .xls)")
+            if file_path:
+                self.excel_path_edit.setText(file_path)
+                self.status_bar.showMessage(f"Excel file selected: {os.path.basename(file_path)}")
         
         except Exception as e:
             error_msg = f"Error browsing for file: {str(e)}"
             self.logger.error(error_msg)
-            messagebox.showerror("Error", f"Could not browse for file: {str(e)}\n\nPlease enter the path manually.")
+            QMessageBox.critical(self, "Error", f"Could not browse for file: {str(e)}")
     
     def browse_directory(self):
-        """Browse for directory and return the path to the text field."""
+        """Browse for directory and update the path field."""
         try:
-            # Create a temporary file to store the selected path
-            temp_file = "selected_dir.tmp"
+            dir_path = QFileDialog.getExistingDirectory(
+                self, "Select Target Directory", "")
             
-            if sys.platform == "win32":
-                # Windows PowerShell approach
-                ps_script = (
-                    "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
-                    "$f.ShowDialog(); "
-                    "if ($f.SelectedPath) { $f.SelectedPath | Out-File -FilePath '" + temp_file + "' }"
-                )
-                subprocess.run(["powershell", "-Command", ps_script], shell=True)
-            
-            elif sys.platform == "darwin":
-                # macOS approach using osascript (AppleScript)
-                script = (
-                    'tell application "System Events"\n'
-                    '   activate\n'
-                    '   set folderPath to choose folder with prompt "Select Target Directory"\n'
-                    '   set folderPath to POSIX path of folderPath\n'
-                    'end tell\n'
-                    f'do shell script "echo " & quoted form of folderPath & " > {temp_file}"'
-                )
-                subprocess.run(["osascript", "-e", script])
-            
-            else:
-                # Linux approach using zenity or similar
-                try:
-                    result = subprocess.run(
-                        ["zenity", "--file-selection", "--directory", "--title=Select Target Directory"],
-                        capture_output=True, text=True
-                    )
-                    if result.returncode == 0 and result.stdout:
-                        with open(temp_file, "w") as f:
-                            f.write(result.stdout.strip())
-                except FileNotFoundError:
-                    # If zenity is not available
-                    messagebox.showinfo("Not Available", 
-                                       "Directory browser not available. Please enter the path manually.")
-                    return
-            
-            # Read the selected path from the temporary file
-            if os.path.exists(temp_file):
-                with open(temp_file, "r") as f:
-                    dir_path = f.read().strip()
-                
-                # Remove the temporary file
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-                
-                # Update the text field if a path was selected
-                if dir_path:
-                    self.dir_entry.delete(0, tk.END)
-                    self.dir_entry.insert(0, dir_path)
-                    self.status_var.set(f"Directory selected: {dir_path}")
+            if dir_path:
+                self.dir_entry.setText(dir_path)
+                self.status_bar.showMessage(f"Directory selected: {dir_path}")
         
         except Exception as e:
             error_msg = f"Error browsing for directory: {str(e)}"
             self.logger.error(error_msg)
-            messagebox.showerror("Error", f"Could not browse for directory: {str(e)}\n\nPlease enter the path manually.")
+            QMessageBox.critical(self, "Error", f"Could not browse for directory: {str(e)}")
     
     def open_log_file(self):
         """Open the log file in the default system text editor."""
@@ -327,72 +260,73 @@ class FileRenamerApp:
                 # Linux and other Unix-like
                 subprocess.Popen(["xdg-open", self.log_file_path])
                 
-            self.status_var.set(f"Opened log file: {self.log_file_path}")
+            self.status_bar.showMessage(f"Opened log file: {self.log_file_path}")
         except Exception as e:
             error_msg = f"Error opening log file: {str(e)}"
             self.logger.error(error_msg)
-            messagebox.showerror("Error", error_msg)
+            QMessageBox.critical(self, "Error", error_msg)
             
             # Fallback: Show the log file path so the user can find it manually
-            messagebox.showinfo("Log File Location", 
+            QMessageBox.information(self, "Log File Location", 
                                f"The log file is located at:\n{self.log_file_path}\n\n"
                                f"Please open it manually with a text editor.")
     
     def add_directory(self):
         """Add a directory to the list."""
-        dir_path = self.dir_entry.get().strip()
+        dir_path = self.dir_entry.text().strip()
         if not dir_path:
-            messagebox.showinfo("Input Required", "Please enter a directory path.")
+            QMessageBox.information(self, "Input Required", "Please enter a directory path.")
             return
             
         if dir_path not in self.target_dirs:
             self.target_dirs.append(dir_path)
-            self.dir_listbox.insert(tk.END, dir_path)
-            self.dir_entry.delete(0, tk.END)  # Clear the entry
-            self.status_var.set(f"Added directory: {dir_path}")
+            self.dir_listbox.addItem(dir_path)
+            self.dir_entry.clear()  # Clear the entry
+            self.status_bar.showMessage(f"Added directory: {dir_path}")
         else:
-            messagebox.showwarning("Duplicate Directory", "This directory is already in the list.")
+            QMessageBox.warning(self, "Duplicate Directory", "This directory is already in the list.")
     
     def remove_directory(self):
         """Remove selected directory from the list."""
-        selected_indices = self.dir_listbox.curselection()
-        if not selected_indices:
-            messagebox.showinfo("Selection Required", "Please select a directory to remove.")
+        selected_items = self.dir_listbox.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "Selection Required", "Please select a directory to remove.")
             return
             
-        for index in reversed(selected_indices):
-            self.target_dirs.pop(index)
-            self.dir_listbox.delete(index)
+        for item in selected_items:
+            row = self.dir_listbox.row(item)
+            self.dir_listbox.takeItem(row)
+            self.target_dirs.remove(item.text())
             
-        self.status_var.set("Directory removed")
+        self.status_bar.showMessage("Directory removed")
     
     def validate_inputs(self):
         """Validate all user inputs before running the renaming process."""
-        if not self.excel_path.get():
-            messagebox.showerror("Input Error", "Please enter an Excel file path.")
+        excel_path = self.excel_path_edit.text()
+        if not excel_path:
+            QMessageBox.critical(self, "Input Error", "Please enter an Excel file path.")
             return False
             
         # Verify the Excel file has the correct extension
-        excel_path = self.excel_path.get()
         if not excel_path.lower().endswith(('.xlsx', '.xls')):
-            messagebox.showerror("Input Error", "The specified file is not an Excel file (.xlsx or .xls).")
+            QMessageBox.critical(self, "Input Error", "The specified file is not an Excel file (.xlsx or .xls).")
             return False
             
         if not os.path.exists(excel_path):
-            messagebox.showerror("Input Error", "The specified Excel file does not exist.")
+            QMessageBox.critical(self, "Input Error", "The specified Excel file does not exist.")
             return False
             
         if not self.target_dirs:
-            messagebox.showerror("Input Error", "Please add at least one target directory.")
+            QMessageBox.critical(self, "Input Error", "Please add at least one target directory.")
             return False
             
         for dir_path in self.target_dirs:
             if not os.path.exists(dir_path):
-                messagebox.showerror("Input Error", f"Directory does not exist: {dir_path}")
+                QMessageBox.critical(self, "Input Error", f"Directory does not exist: {dir_path}")
                 return False
                 
-        if not self.master_name_col.get() or not self.proxy_name_col.get():
-            messagebox.showerror("Input Error", "Please provide column names for Master and Proxy names.")
+        if not self.master_col_edit.text() or not self.proxy_col_edit.text():
+            QMessageBox.critical(self, "Input Error", "Please provide column names for Master and Proxy names.")
             return False
             
         return True
@@ -402,11 +336,17 @@ class FileRenamerApp:
         if not self.validate_inputs():
             return
             
+        # Update configuration values from UI
+        self.master_name_col = self.master_col_edit.text()
+        self.proxy_name_col = self.proxy_col_edit.text()
+        self.master_suffix = self.suffix_edit.text()
+        self.excel_path = self.excel_path_edit.text()
+            
         # Disable UI during processing
         self.disable_ui()
         
         # Redirect stdout to console
-        sys.stdout = RedirectText(self.console)
+        sys.stdout = TextRedirector(self.console)
         
         # Start processing in a separate thread
         thread = threading.Thread(target=self.rename_files_process)
@@ -415,38 +355,40 @@ class FileRenamerApp:
     
     def disable_ui(self):
         """Disable UI controls during processing."""
-        for child in self.root.winfo_children():
-            for widget in child.winfo_children():
-                if isinstance(widget, (ttk.Button, ttk.Entry)):
-                    widget.configure(state="disabled")
-                if isinstance(widget, tk.Listbox):
-                    widget.configure(state="disabled")
-        self.status_var.set("Processing... Please wait.")
+        central_widget = self.centralWidget()
+        for child in central_widget.findChildren(QPushButton):
+            child.setEnabled(False)
+        
+        for child in central_widget.findChildren(QLineEdit):
+            child.setEnabled(False)
+            
+        self.dir_listbox.setEnabled(False)
+        self.status_bar.showMessage("Processing... Please wait.")
     
     def enable_ui(self):
         """Re-enable UI controls after processing."""
-        for child in self.root.winfo_children():
-            for widget in child.winfo_children():
-                if isinstance(widget, (ttk.Button, ttk.Entry)):
-                    widget.configure(state="normal")
-                if isinstance(widget, tk.Listbox):
-                    widget.configure(state="normal")
-        self.status_var.set("Ready")
+        central_widget = self.centralWidget()
+        for child in central_widget.findChildren(QPushButton):
+            child.setEnabled(True)
+        
+        for child in central_widget.findChildren(QLineEdit):
+            child.setEnabled(True)
+            
+        self.dir_listbox.setEnabled(True)
+        self.status_bar.showMessage("Ready")
     
     def rename_files_process(self):
         """Main file renaming process."""
         try:
             # Get configuration values
-            excel_file = Path(self.excel_path.get())
+            excel_file = Path(self.excel_path)
             target_dirs = [Path(dir_path) for dir_path in self.target_dirs]
-            master_col = self.master_name_col.get()
-            proxy_col = self.proxy_name_col.get()
-            suffix = self.master_suffix.get()
+            master_col = self.master_name_col
+            proxy_col = self.proxy_name_col
+            suffix = self.master_suffix
             
             # Clear console
-            self.console.configure(state="normal")
-            self.console.delete(1.0, tk.END)
-            self.console.configure(state="disabled")
+            self.console.clear()
             
             print(f"Starting file renaming process:")
             print(f"Excel file: {excel_file}")
@@ -463,8 +405,10 @@ class FileRenamerApp:
             except Exception as e:
                 print(f"Error reading Excel file: {str(e)}")
                 self.logger.error(f"Error reading Excel file: {str(e)}")
-                messagebox.showerror("Excel Error", f"Error reading Excel file: {str(e)}")
-                self.root.after(0, self.enable_ui)
+                QApplication.instance().processEvents()  # Process pending events
+                QMessageBox.critical(self, "Excel Error", f"Error reading Excel file: {str(e)}")
+                QApplication.instance().processEvents()  # Process pending events
+                self.enable_ui()
                 return
                 
             # Verify required columns exist
@@ -472,8 +416,10 @@ class FileRenamerApp:
                 error_msg = f"Required columns not found. Need '{master_col}' and '{proxy_col}'"
                 print(error_msg)
                 self.logger.error(error_msg)
-                messagebox.showerror("Column Error", error_msg)
-                self.root.after(0, self.enable_ui)
+                QApplication.instance().processEvents()  # Process pending events
+                QMessageBox.critical(self, "Column Error", error_msg)
+                QApplication.instance().processEvents()  # Process pending events
+                self.enable_ui()
                 return
                 
             # Extract data from Excel
@@ -491,8 +437,10 @@ class FileRenamerApp:
                 error_msg = f"Invalid filenames found in rows: {', '.join(map(str, invalid_rows))}"
                 print(error_msg)
                 self.logger.error(error_msg)
-                messagebox.showerror("Validation Error", error_msg)
-                self.root.after(0, self.enable_ui)
+                QApplication.instance().processEvents()  # Process pending events
+                QMessageBox.critical(self, "Validation Error", error_msg)
+                QApplication.instance().processEvents()  # Process pending events
+                self.enable_ui()
                 return
             
             # Check for duplicates
@@ -512,8 +460,10 @@ class FileRenamerApp:
                 error_msg = " and ".join(error_parts)
                 print(error_msg)
                 self.logger.error(error_msg)
-                messagebox.showerror("Duplicate Error", error_msg)
-                self.root.after(0, self.enable_ui)
+                QApplication.instance().processEvents()  # Process pending events
+                QMessageBox.critical(self, "Duplicate Error", error_msg)
+                QApplication.instance().processEvents()  # Process pending events
+                self.enable_ui()
                 return
             
             # Collect files to process from all target directories
@@ -539,20 +489,24 @@ class FileRenamerApp:
             print(completion_msg)
             print("See 'renames.log' for complete details.")
             self.logger.info(completion_msg)
-            messagebox.showinfo("Process Complete", completion_msg)
+            QApplication.instance().processEvents()  # Process pending events
+            QMessageBox.information(self, "Process Complete", completion_msg)
+            QApplication.instance().processEvents()  # Process pending events
             
         except Exception as e:
             error_msg = f"Unexpected error: {str(e)}\n{traceback.format_exc()}"
             print(error_msg)
             self.logger.exception(error_msg)
-            messagebox.showerror("Error", error_msg)
+            QApplication.instance().processEvents()  # Process pending events
+            QMessageBox.critical(self, "Error", error_msg)
+            QApplication.instance().processEvents()  # Process pending events
             
         finally:
             # Restore stdout
             sys.stdout = self.stdout_backup
             
-            # Re-enable UI on the main thread
-            self.root.after(0, self.enable_ui)
+            # Re-enable UI
+            self.enable_ui()
     
     def validate_filename(self, filename, index, column_name):
         """Check if filename contains valid characters and is not empty."""
@@ -658,10 +612,10 @@ def main():
         error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
         print(error_msg)  # Print to console/terminal
         
-        # Try to show error dialog if tkinter is still working
+        # Try to show error dialog if QApplication is still working
         try:
-            messagebox.showerror('Unhandled Exception', 
-                                 f"An error occurred: {str(exc_value)}\n\nSee log for details.")
+            QMessageBox.critical(None, 'Unhandled Exception', 
+                               f"An error occurred: {str(exc_value)}\n\nSee log for details.")
         except:
             pass  # If messagebox fails, at least we printed to console
     
@@ -669,9 +623,10 @@ def main():
     sys.excepthook = show_error
     
     # Create and run the application
-    root = tk.Tk()
-    app = FileRenamerApp(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = FileRenamerApp()
+    window.show()
+    sys.exit(app.exec_())
 
 
 if __name__ == '__main__':
