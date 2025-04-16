@@ -491,7 +491,7 @@ class FileFinder:
             # Find matching files
             # Only pass first_match_only to _find_matches if we haven't found any matches yet
             should_find_first_only = first_match_only and not found_files
-            matches, subdirs_searched = self._find_matches(pattern, source_dirs, should_find_first_only)
+            matches, subdirs_searched = self._find_matches(pattern, src_dir, should_find_first_only)
 
             
             # Track directories searched
