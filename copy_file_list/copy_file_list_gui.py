@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-File Search and Copy Utility GUI v1.0
+File Search and Copy Utility GUI v1.1
 =====================================
 A PyQt5 GUI frontend for the copy_file_list.py script.
 This application provides a user-friendly interface to:
@@ -507,11 +507,8 @@ class CopyFileListGUI(QMainWindow):
         options_row1.addWidget(self.verify_check)
         
         options_row1.addStretch()
-        
+
         # Row 2 options
-        self.parallel_check = QCheckBox("Parallel Processing")
-        options_row2.addWidget(self.parallel_check)
-        
         self.use_regex_check = QCheckBox("Use Regex")
         options_row2.addWidget(self.use_regex_check)
 
@@ -781,10 +778,7 @@ class CopyFileListGUI(QMainWindow):
         
         if self.verify_check.isChecked():
             command.append("--verify")
-        
-        if self.parallel_check.isChecked():
-            command.append("--parallel")
-        
+
         if self.first_match_only_check.isChecked():
             command.append("--first-match-only")
         
@@ -841,21 +835,21 @@ class CopyFileListGUI(QMainWindow):
         if total > 0:
             percent = int(current * 100 / total)
             self.progress_bar.setValue(percent)
-    
+
     def add_processed_file(self, filename):
         """Add processed file to the files list."""
         self.files_list_widget.addItem(filename)
         self.files_list_widget.scrollToBottom()
-    
+
     def process_finished(self, exit_code, exit_status):
         """Handle process finished event."""
         # Wait for stream reader to finish
         self.stream_reader.wait(1000)  # Wait up to 1 second
-        
+
         # Reset UI state
         self.run_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
-        
+
         # Determine status
         if exit_code == 0:
             if self.dry_run_check.isChecked():
@@ -865,115 +859,35 @@ class CopyFileListGUI(QMainWindow):
             self.progress_bar.setValue(100)
         else:
             status_text = f"Operation failed with exit code {exit_code}"
-        
+
         # Update status
         self.status_label.setText(status_text)
-    
+
     def cancel_script(self):
         """Cancel the running script."""
         if self.process and self.process.state() == QProcess.Running:
             # Confirm with user
             reply = QMessageBox.question(
-                self, "Confirm Cancel", 
+                self, "Confirm Cancel",
                 "Are you sure you want to cancel the operation?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No
             )
-            
+
             if reply == QMessageBox.Yes:
                 # Terminate the process
                 self.process.terminate()
-                
+
                 # If it doesn't terminate, try to kill it
                 QTimer.singleShot(2000, self.force_kill_process)
-                
+
                 self.status_label.setText("Operation cancelled")
                 self.run_button.setEnabled(True)
                 self.cancel_button.setEnabled(False)
-    
+
     def force_kill_process(self):
         """Force kill the process if it didn't terminate."""
         if self.process and self.process.state() != QProcess.NotRunning:
             self.process.kill()
-    
-    def handle_stdout(self):
-        """Handle standard output from the process."""
-        data = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
-        lines = data.splitlines()
-        
-        for line in lines:
-            if line:
-                self.console_widget.append_text(line)
-                
-                # Update progress bar for progress lines
-                self.update_progress_from_line(line)
-                
-                # Update files list for copy lines
-                self.update_files_list_from_line(line)
-    
-    def update_progress_from_line(self, line):
-        """Update progress bar based on progress information in the line."""
-        # Match progress bar output
-        progress_match = re.search(r'Progress:.*?(\d+)%.*?\((\d+)/(\d+)', line)
-        if progress_match:
-            percent = int(progress_match.group(1))
-            self.progress_bar.setValue(percent)
-            return
-            
-        # Match EDL parsing progress
-        edl_match = re.search(r'EDL Parsing Progress.*?\((\d+)/(\d+)', line)
-        if edl_match:
-            current = int(edl_match.group(1))
-            total = int(edl_match.group(2))
-            percent = int(current * 100 / total)
-            self.progress_bar.setValue(percent)
-            return
-    
-    def update_files_list_from_line(self, line):
-        """Update files list based on file information in the line."""
-        # Look for "Copied to:" or "WOULD COPY:" lines
-        if "Copied to:" in line or "WOULD COPY:" in line:
-            # Extract just the filename from the path
-            parts = line.split(":", 1)
-            if len(parts) > 1:
-                filepath = parts[1].strip()
-                filename = os.path.basename(filepath)
-                self.files_list_widget.addItem(filename)
-                # Scroll to bottom
-                self.files_list_widget.scrollToBottom()
-    
-    def process_finished(self, exit_code, exit_status):
-        """Handle process finished event."""
-        if exit_code == 0:
-            if self.dry_run_check.isChecked():
-                self.status_label.setText("Dry run completed successfully")
-            else:
-                self.status_label.setText("Operation completed successfully")
-        else:
-            self.status_label.setText(f"Operation failed with exit code {exit_code}")
-        
-        # Update UI state
-        self.run_button.setEnabled(True)
-        self.cancel_button.setEnabled(False)
-        
-        # Ensure progress bar is at 100% if successful
-        if exit_code == 0:
-            self.progress_bar.setValue(100)
-    
-    def cancel_script(self):
-        """Cancel the running script."""
-        if self.process and self.process.state() == QProcess.Running:
-            # Confirm with user
-            reply = QMessageBox.question(
-                self, "Confirm Cancel", 
-                "Are you sure you want to cancel the operation?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-            )
-            
-            if reply == QMessageBox.Yes:
-                self.process.kill()
-                self.status_label.setText("Operation cancelled")
-                self.run_button.setEnabled(True)
-                self.cancel_button.setEnabled(False)
     
     def update_ui_state(self):
         """Update UI state based on current conditions."""
@@ -1029,21 +943,21 @@ class CopyFileListGUI(QMainWindow):
 def main():
     """
     Main entry point for the File Search and Copy Utility GUI application.
-    
+
     Sets up the application, configures global settings, creates the main window,
     and runs the event loop with error handling.
     """
     try:
+        # Set high DPI scaling BEFORE creating QApplication
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
         # Create the QApplication instance
         app = QApplication(sys.argv)
-        
+
         # Set application metadata
         app.setApplicationName("File Search and Copy Utility")
         app.setApplicationVersion("1.0")
-        
-        # Set high DPI scaling if supported
-        app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-        app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         
         # Create the main window
         main_window = CopyFileListGUI()
