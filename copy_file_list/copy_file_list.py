@@ -25,7 +25,6 @@ from typing import List, Dict, Set, Tuple, Optional, Union
 import fnmatch
 import logging
 import traceback
-import multiprocessing
 import xxhash
 
 
@@ -334,22 +333,15 @@ class EDLParser:
 class FileFinder:
     """Handles finding files based on patterns across source directories."""
     
-    def __init__(self, logger: Logger, case_sensitive: bool = True, use_regex: bool = False,
-                 max_workers: Optional[int] = None):
+    def __init__(self, logger: Logger, case_sensitive: bool = True, use_regex: bool = False):
         self.logger = logger
         self.case_sensitive = case_sensitive
         self.use_regex = use_regex
-        self.max_workers = max_workers
         # Track statistics
         self.dirs_searched_set = set()  # To keep track of unique directories
         self.total_dirs_searched = 0
         self.excluded_files = 0  # Track files excluded by pattern
         self.size_exceeded_files = 0  # Track files excluded by size
-
-        if self.max_workers is None:
-            # Use half of available CPU cores by default
-            self.max_workers = max(1, multiprocessing.cpu_count() // 2)
-        self.logger.debug(f"Initialized FileFinder with {self.max_workers} max workers")
     
     def reset_statistics(self):
         """Reset search statistics."""
