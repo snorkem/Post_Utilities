@@ -31,7 +31,6 @@ Your digital asset hunting and gathering expert. This tool:
 - Copies files with ninja-like precision
 - Supports crazy-flexible pattern matching
 - Logs everything meticulously
-- Processes files in parallel
 
 ### 4. Lower Thirds Generator
 **File:** `l3rds_from_excel.py`
@@ -49,6 +48,17 @@ The ultimate file name makeover artist. Quickly:
 - Rename batches of files
 - Follow spreadsheet naming rules
 - Keep detailed logs of all transformations
+
+### 6. Directory Indexer
+**File:** `directory_indexer.py`
+
+Your visual directory explorer on steroids! Creates beautiful, interactive HTML archives:
+- Scans entire directory trees (handles up to 200K files smoothly)
+- Generates single-file HTML reports with zero dependencies
+- Live search, sort, and filter capabilities
+- Works offline - perfect for archiving project drives!
+
+**Performance Note:** Optimized for datasets up to ~200,000 files. For massive archives (1M+ files), consider indexing subdirectories separately.
 
 ## Get Started
 
