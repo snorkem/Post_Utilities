@@ -15,6 +15,56 @@ from datetime import datetime
 from collections import defaultdict
 from html import escape as html_escape_builtin
 
+
+# ============================================================================
+# Configuration Constants
+# ============================================================================
+
+class UIConfig:
+    """User interface rendering configuration."""
+    ROW_HEIGHT = 45  # Height of each table row in pixels
+    BUFFER_SIZE = 10  # Extra rows to render above/below viewport
+    CHUNK_SIZE = 5000  # Files per chunk in JSON mode
+    CHUNK_LOAD_DELAY_MS = 50  # Delay between loading chunks
+    SCROLL_THROTTLE_MS = 16  # ~60fps scroll throttle (1000/60)
+
+
+class DatabaseConfig:
+    """Database mode configuration."""
+    FILE_COUNT_THRESHOLD = 200_000  # Switch to DB mode above this count
+    PAGE_SIZE = 100  # Rows to fetch per database query
+    BATCH_SIZE = 1000  # Database insert batch size
+
+
+class ProgressConfig:
+    """Progress reporting configuration."""
+    REPORT_INTERVAL = 1000  # Report progress every N files
+
+
+class ServerConfig:
+    """HTTP server configuration."""
+    DEFAULT_PORT = 8000  # Default port for serve.py
+
+
+class DisplayConfig:
+    """Display formatting configuration."""
+    SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    DATE_FORMAT_SHORT = '%Y-%m-%d'
+    DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+    DATETIME_FORMAT_DISPLAY = '%Y-%m-%d, %H:%M:%S'
+
+
+class StatisticsConfig:
+    """Statistics generation configuration."""
+    TOP_EXTENSIONS_COUNT = 10  # Show top N extensions
+    TOP_FILES_COUNT = 10  # Show top N largest files
+    RECENT_FILES_COUNT = 10  # Show top N recent files
+
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
 def get_size_human_readable(size_bytes):
     """Convert bytes to human readable format"""
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
@@ -63,6 +113,660 @@ def get_file_icon(extension):
         '.ttf': '🔤', '.otf': '🔤', '.woff': '🔤', '.woff2': '🔤',
     }
     return icon_map.get(extension.lower(), '📎')
+
+def get_common_css():
+    """Return common CSS styles used in both HTML templates"""
+    return """
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            opacity: 0.9;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab:hover {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: #fafafa;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            padding: 12px;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            outline: none;
+        }
+
+        .search-box:focus {
+            border-color: #667eea;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-label {
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        select {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        select:focus {
+            border-color: #667eea;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1200px;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            user-select: none;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 2px solid #ddd;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        th:hover {
+            background: #e9ecef;
+        }
+
+        th::after {
+            content: ' ↕';
+            opacity: 0.3;
+            font-size: 12px;
+        }
+
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .file-icon {
+            font-size: 18px;
+            margin-right: 8px;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+            display: flex;
+            align-items: center;
+        }
+
+        .file-path {
+            color: #666;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        .file-extension {
+            display: inline-block;
+            padding: 3px 10px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .size-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .size-bar-container {
+            flex: 1;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            min-width: 50px;
+            max-width: 100px;
+        }
+
+        .size-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        .size-text {
+            text-align: right;
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: #555;
+            white-space: nowrap;
+            min-width: 70px;
+        }
+
+        .modified {
+            color: #666;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .no-results {
+            padding: 40px;
+            text-align: center;
+            color: #999;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .stat-card h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .stat-list {
+            list-style: none;
+        }
+
+        .stat-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .stat-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-list-label {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-list-value {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        .footer {
+            padding: 20px 30px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .result-count {
+            padding: 10px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .table-container {
+            position: relative;
+            height: 600px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+
+        .table-spacer {
+            position: relative;
+            width: 100%;
+        }
+
+        .table-viewport {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            will-change: transform;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            min-width: 400px;
+        }
+
+        .loading-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .loading-progress-bar {
+            height: 24px;
+            background: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .loading-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .loading-stats {
+            font-size: 13px;
+            color: #666;
+            text-align: center;
+        }
+"""
+
+def get_common_css_inline_mode():
+    """Return CSS specific to inline mode (with column resizing and settings panel)"""
+    return """
+        /* Column width controls */
+        th:nth-child(1) { width: var(--col-name-width, 20%); } /* File Name */
+        th:nth-child(2) { width: var(--col-type-width, 8%); }  /* Type */
+        th:nth-child(3) { width: var(--col-path-width, 35%); } /* Path */
+        th:nth-child(4) { width: var(--col-size-width, 13%); } /* Size */
+        th:nth-child(5) { width: var(--col-modified-width, 12%); } /* Modified */
+        th:nth-child(6) { width: var(--col-created-width, 12%); } /* Created */
+
+        /* Column resize handles */
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            z-index: 20;
+            background: transparent;
+        }
+
+        .resize-handle:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        .resize-handle.resizing {
+            background: rgba(102, 126, 234, 0.5);
+        }
+
+        th {
+            position: relative;
+        }
+
+        /* Settings Panel */
+        .settings-panel {
+            padding: 20px 30px;
+            background: #fafafa;
+            border-bottom: 1px solid #e0e0e0;
+            display: none;
+        }
+
+        .settings-panel.visible {
+            display: block;
+        }
+
+        .settings-toggle {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .settings-toggle:hover {
+            background: #5568d3;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .setting-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .setting-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .setting-input input[type="range"] {
+            flex: 1;
+            cursor: pointer;
+        }
+
+        .setting-value {
+            min-width: 50px;
+            text-align: right;
+            font-size: 13px;
+            color: #666;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .preset-btn {
+            padding: 8px 16px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .preset-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .preset-btn.reset {
+            background: #ff6b6b;
+            color: white;
+            border-color: #ff6b6b;
+        }
+
+        .preset-btn.reset:hover {
+            background: #ee5a52;
+            border-color: #ee5a52;
+        }
+
+        .path-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            z-index: 1000;
+            pointer-events: none;
+            white-space: nowrap;
+            max-width: 600px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: none;
+        }
+
+        .path-tooltip.visible {
+            display: block;
+        }
+"""
+
+def get_common_css_db_mode():
+    """Return CSS specific to database mode"""
+    return """
+        th:nth-child(1) { width: 20%; } /* File Name */
+        th:nth-child(2) { width: 8%; }  /* Type */
+        th:nth-child(3) { width: 35%; } /* Path */
+        th:nth-child(4) { width: 13%; } /* Size */
+        th:nth-child(5) { width: 12%; } /* Modified */
+        th:nth-child(6) { width: 12%; } /* Created */
+
+        .db-mode-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+"""
+
+def get_common_javascript():
+    """Return common JavaScript utility functions used in both HTML templates"""
+    return """
+        function throttle(func, limit) {
+            let inThrottle;
+            return function() {
+                const args = arguments;
+                const context = this;
+                if (!inThrottle) {
+                    func.apply(context, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function updateSortHeaders() {
+            document.querySelectorAll('th[data-column]').forEach(header => {
+                header.classList.remove('sort-asc', 'sort-desc');
+                if (header.dataset.column === currentSort.column) {
+                    header.classList.add(currentSort.ascending ? 'sort-asc' : 'sort-desc');
+                }
+            });
+        }
+"""
+
+def generate_extension_options(extension_stats):
+    """Generate HTML options for extension filter dropdown"""
+    sorted_extensions = sorted(extension_stats.items(), key=lambda x: x[1]['count'], reverse=True)
+    return '\n'.join(
+        f'<option value="{html_escape_builtin(ext)}">{html_escape_builtin(ext)} ({stats["count"]} files)</option>'
+        for ext, stats in sorted_extensions
+    )
+
+def calculate_total_files(extension_stats):
+    """Calculate total number of files from extension statistics"""
+    return sum(stats['count'] for stats in extension_stats.values())
+
+def get_directory_name(path):
+    """Get directory name from path, returning 'root' for empty names"""
+    return Path(path).name or 'root'
 
 def scan_directory(root_path):
     """Scan directory and collect file information"""
@@ -121,7 +825,7 @@ def scan_directory(root_path):
                 extension_stats[extension]['count'] += 1
                 extension_stats[extension]['size'] += size_bytes
 
-                if len(files_data) % 1000 == 0:
+                if len(files_data) % ProgressConfig.REPORT_INTERVAL == 0:
                     print(f"  Processed {len(files_data)} files...")
 
             except (PermissionError, OSError):
@@ -201,7 +905,7 @@ def create_database(files_data, total_size, extension_stats, root_path, db_path)
                        (ext, stats['count'], stats['size']))
 
     # Insert files in batches for performance
-    BATCH_SIZE = 1000
+    BATCH_SIZE = DatabaseConfig.BATCH_SIZE
     for i in range(0, len(files_data), BATCH_SIZE):
         batch = files_data[i:i + BATCH_SIZE]
         cursor.executemany('''
@@ -231,585 +935,8 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Directory Index: {root_name}</title>
     <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-        
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            padding: 20px;
-            background: #f5f5f5;
-        }}
-        
-        .container {{
-            max-width: 1600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }}
-        
-        .header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-        }}
-        
-        .header h1 {{
-            margin-bottom: 10px;
-            font-size: 28px;
-        }}
-        
-        .stats {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }}
-        
-        .stat-item {{
-            display: flex;
-            flex-direction: column;
-        }}
-        
-        .stat-label {{
-            opacity: 0.9;
-            margin-bottom: 5px;
-            font-size: 13px;
-        }}
-        
-        .stat-value {{
-            font-size: 24px;
-            font-weight: bold;
-        }}
-        
-        .tabs {{
-            display: flex;
-            background: #f8f9fa;
-            border-bottom: 2px solid #e0e0e0;
-        }}
-        
-        .tab {{
-            padding: 15px 30px;
-            cursor: pointer;
-            border: none;
-            background: none;
-            font-size: 14px;
-            font-weight: 500;
-            color: #666;
-            transition: all 0.3s;
-            border-bottom: 3px solid transparent;
-        }}
-        
-        .tab:hover {{
-            background: #e9ecef;
-            color: #333;
-        }}
-        
-        .tab.active {{
-            color: #667eea;
-            border-bottom-color: #667eea;
-            background: white;
-        }}
-        
-        .tab-content {{
-            display: none;
-        }}
-        
-        .tab-content.active {{
-            display: block;
-        }}
-        
-        .controls {{
-            padding: 20px 30px;
-            background: #fafafa;
-            border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }}
-        
-        .search-box {{
-            flex: 1;
-            min-width: 300px;
-            padding: 12px;
-            font-size: 14px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            outline: none;
-        }}
-        
-        .search-box:focus {{
-            border-color: #667eea;
-        }}
-        
-        .filter-group {{
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }}
-        
-        .filter-label {{
-            font-size: 13px;
-            color: #666;
-            font-weight: 500;
-        }}
-        
-        select {{
-            padding: 8px 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 13px;
-            cursor: pointer;
-            outline: none;
-        }}
-        
-        select:focus {{
-            border-color: #667eea;
-        }}
-
-        table {{
-            width: 100%;
-            min-width: 1200px;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }}
-
-        /* Column width controls */
-        th:nth-child(1) {{ width: var(--col-name-width, 20%); }} /* File Name */
-        th:nth-child(2) {{ width: var(--col-type-width, 8%); }}  /* Type */
-        th:nth-child(3) {{ width: var(--col-path-width, 35%); }} /* Path */
-        th:nth-child(4) {{ width: var(--col-size-width, 13%); }} /* Size */
-        th:nth-child(5) {{ width: var(--col-modified-width, 12%); }} /* Modified */
-        th:nth-child(6) {{ width: var(--col-created-width, 12%); }} /* Created */
-
-        th {{
-            background: #f8f9fa;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            color: #333;
-            cursor: pointer;
-            user-select: none;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            border-bottom: 2px solid #ddd;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }}
-        
-        th:hover {{
-            background: #e9ecef;
-        }}
-        
-        th::after {{
-            content: ' ↕';
-            opacity: 0.3;
-            font-size: 12px;
-        }}
-        
-        th.sort-asc::after {{
-            content: ' ↑';
-            opacity: 1;
-        }}
-        
-        th.sort-desc::after {{
-            content: ' ↓';
-            opacity: 1;
-        }}
-        
-        /* Column resize handles */
-        .resize-handle {{
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 8px;
-            cursor: col-resize;
-            z-index: 20;
-            background: transparent;
-        }}
-
-        .resize-handle:hover {{
-            background: rgba(102, 126, 234, 0.3);
-        }}
-
-        .resize-handle.resizing {{
-            background: rgba(102, 126, 234, 0.5);
-        }}
-
-        th {{
-            position: relative;
-        }}
-
-        td {{
-            padding: 12px 15px;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 13px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-        
-        tr:hover {{
-            background: #f8f9fa;
-        }}
-        
-        .file-icon {{
-            font-size: 18px;
-            margin-right: 8px;
-        }}
-        
-        .file-name {{
-            font-weight: 500;
-            color: #333;
-            display: flex;
-            align-items: center;
-        }}
-        
-        .file-path {{
-            color: #666;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 12px;
-            word-break: break-all;
-        }}
-        
-        .file-extension {{
-            display: inline-block;
-            padding: 3px 10px;
-            background: #e3f2fd;
-            color: #1976d2;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }}
-        
-        .size-cell {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-        
-        .size-bar-container {{
-            flex: 1;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            overflow: hidden;
-            min-width: 50px;
-            max-width: 100px;
-        }}
-        
-        .size-bar {{
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-        }}
-        
-        .size-text {{
-            text-align: right;
-            font-family: 'Monaco', 'Courier New', monospace;
-            color: #555;
-            white-space: nowrap;
-            min-width: 70px;
-        }}
-        
-        .modified {{
-            color: #666;
-            font-size: 12px;
-            white-space: nowrap;
-        }}
-        
-        .no-results {{
-            padding: 40px;
-            text-align: center;
-            color: #999;
-        }}
-        
-        .stats-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            padding: 30px;
-        }}
-        
-        .stat-card {{
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-        }}
-        
-        .stat-card h3 {{
-            font-size: 16px;
-            margin-bottom: 15px;
-            color: #333;
-        }}
-        
-        .stat-list {{
-            list-style: none;
-        }}
-        
-        .stat-list-item {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }}
-        
-        .stat-list-item:last-child {{
-            border-bottom: none;
-        }}
-        
-        .stat-list-label {{
-            font-size: 13px;
-            color: #666;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }}
-        
-        .stat-list-value {{
-            font-weight: 600;
-            color: #333;
-            font-size: 14px;
-        }}
-        
-        .progress-bar {{
-            height: 6px;
-            background: #e0e0e0;
-            border-radius: 3px;
-            overflow: hidden;
-            margin-top: 5px;
-        }}
-        
-        .progress-fill {{
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-        }}
-        
-        .footer {{
-            padding: 20px 30px;
-            text-align: center;
-            color: #999;
-            font-size: 12px;
-            border-top: 1px solid #e0e0e0;
-        }}
-        
-        .result-count {{
-            padding: 10px 30px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 13px;
-            color: #666;
-        }}
-
-        /* Settings Panel */
-        .settings-panel {{
-            padding: 20px 30px;
-            background: #fafafa;
-            border-bottom: 1px solid #e0e0e0;
-            display: none;
-        }}
-
-        .settings-panel.visible {{
-            display: block;
-        }}
-
-        .settings-toggle {{
-            padding: 8px 16px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }}
-
-        .settings-toggle:hover {{
-            background: #5568d3;
-        }}
-
-        .settings-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }}
-
-        .setting-item {{
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }}
-
-        .setting-label {{
-            font-size: 13px;
-            font-weight: 600;
-            color: #333;
-        }}
-
-        .setting-input {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-
-        .setting-input input[type="range"] {{
-            flex: 1;
-            cursor: pointer;
-        }}
-
-        .setting-value {{
-            min-width: 50px;
-            text-align: right;
-            font-size: 13px;
-            color: #666;
-            font-family: 'Monaco', 'Courier New', monospace;
-        }}
-
-        .preset-buttons {{
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }}
-
-        .preset-btn {{
-            padding: 8px 16px;
-            background: white;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }}
-
-        .preset-btn:hover {{
-            border-color: #667eea;
-            color: #667eea;
-        }}
-
-        .preset-btn.reset {{
-            background: #ff6b6b;
-            color: white;
-            border-color: #ff6b6b;
-        }}
-
-        .preset-btn.reset:hover {{
-            background: #ee5a52;
-            border-color: #ee5a52;
-        }}
-
-        .path-tooltip {{
-            position: absolute;
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-family: 'Monaco', 'Courier New', monospace;
-            z-index: 1000;
-            pointer-events: none;
-            white-space: nowrap;
-            max-width: 600px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: none;
-        }}
-
-        .path-tooltip.visible {{
-            display: block;
-        }}
-
-        /* Virtual scrolling styles */
-        .table-container {{
-            position: relative;
-            height: 600px;
-            overflow-y: auto;
-            overflow-x: auto;
-        }}
-
-        .table-spacer {{
-            position: relative;
-            width: 100%;
-        }}
-
-        .table-viewport {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            will-change: transform;
-        }}
-
-        /* Loading progress bar */
-        .loading-overlay {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }}
-
-        .loading-overlay.hidden {{
-            display: none;
-        }}
-
-        .loading-content {{
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            min-width: 400px;
-        }}
-
-        .loading-title {{
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #333;
-        }}
-
-        .loading-progress-bar {{
-            height: 24px;
-            background: #e0e0e0;
-            border-radius: 12px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }}
-
-        .loading-progress-fill {{
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 12px;
-            font-weight: 600;
-        }}
-
-        .loading-stats {{
-            font-size: 13px;
-            color: #666;
-            text-align: center;
-        }}
+{css_common}
+{css_inline_mode}
     </style>
 </head>
 <body>
@@ -988,7 +1115,7 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
         let tableData = [];
         let chunksLoaded = 0;
         let totalChunks = 0;
-        const CHUNK_SIZE = 5000;
+        const CHUNK_SIZE = {chunk_size};
 
         // Data chunks will be embedded below
         const dataChunks = {data_chunks_json};
@@ -1024,6 +1151,9 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
             default: {{ name: 20, type: 8, path: 45, size: 15, modified: 12 }},
             'wide-path': {{ name: 15, type: 8, path: 55, size: 12, modified: 10 }}
         }};
+
+        // Common utility functions
+{js_common}
 
         // Load saved widths from localStorage or use defaults
         function loadColumnWidths() {{
@@ -1272,16 +1402,7 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
                 return 0;
             }});
         }}
-        
-        function updateSortHeaders() {{
-            document.querySelectorAll('th[data-column]').forEach(header => {{
-                header.classList.remove('sort-asc', 'sort-desc');
-                if (header.dataset.column === currentSort.column) {{
-                    header.classList.add(currentSort.ascending ? 'sort-asc' : 'sort-desc');
-                }}
-            }});
-        }}
-        
+
         function renderTable() {{
             const tbody = document.getElementById('tableBody');
             const noResults = document.getElementById('noResults');
@@ -1350,28 +1471,8 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
             }}).join('');
         }}
 
-        // Throttle scroll events for performance
-        function throttle(func, limit) {{
-            let inThrottle;
-            return function() {{
-                const args = arguments;
-                const context = this;
-                if (!inThrottle) {{
-                    func.apply(context, args);
-                    inThrottle = true;
-                    setTimeout(() => inThrottle = false, limit);
-                }}
-            }}
-        }}
-
         // Add scroll event listener for virtual scrolling
         document.getElementById('tableContainer').addEventListener('scroll', throttle(renderTable, 16));
-
-        function escapeHtml(text) {{
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }}
 
         // Progressive chunk loading function
         function loadNextChunk() {{
@@ -1436,11 +1537,7 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
     
     # Generate extension filter options
     sorted_extensions = sorted(extension_stats.items(), key=lambda x: x[1]['count'], reverse=True)
-    # Use list comprehension with join for better performance
-    extension_options = '\n'.join(
-        f'<option value="{html_escape_builtin(ext)}">{html_escape_builtin(ext)} ({stats["count"]} files)</option>'
-        for ext, stats in sorted_extensions
-    )
+    extension_options = generate_extension_options(extension_stats)
     
     # Generate statistics for top extensions by count
     top_ext_count = sorted_extensions[:10]
@@ -1535,7 +1632,7 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
     ]
 
     # Prepare data for chunked JSON (5000 files per chunk)
-    CHUNK_SIZE = 5000
+    CHUNK_SIZE = UIConfig.CHUNK_SIZE
     data_chunks = []
 
     for i in range(0, len(files_data), CHUNK_SIZE):
@@ -1558,10 +1655,9 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
     data_chunks_json = json.dumps(data_chunks)
 
     # Fill in template (cache Path object)
-    root_path_obj = Path(root_path)
     total_file_count = len(files_data)
     html_content = html_template.format(
-        root_name=root_path_obj.name or 'root',
+        root_name=get_directory_name(root_path),
         root_path=str(root_path),
         total_files=f"{total_file_count:,}",  # Formatted for display
         total_files_raw=total_file_count,  # Raw number for JavaScript
@@ -1572,11 +1668,15 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
         extension_options=extension_options,
         table_rows='',  # Will be rendered by JavaScript
         data_chunks_json=data_chunks_json,
+        chunk_size=UIConfig.CHUNK_SIZE,
         top_extensions_by_count=''.join(top_extensions_by_count_html),
         top_extensions_by_size=''.join(top_extensions_by_size_html),
         largest_files=''.join(largest_files_html),
         recent_files=''.join(recent_files_html),
-        recent_created=''.join(recent_created_html)
+        recent_created=''.join(recent_created_html),
+        css_common=get_common_css(),
+        css_inline_mode=get_common_css_inline_mode(),
+        js_common=get_common_javascript()
     )
 
     # Write to file
@@ -1603,448 +1703,8 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
     <title>Directory Index: {root_name}</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
     <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            padding: 20px;
-            background: #f5f5f5;
-        }}
-
-        .container {{
-            max-width: 1600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }}
-
-        .header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-        }}
-
-        .header h1 {{
-            margin-bottom: 10px;
-            font-size: 28px;
-        }}
-
-        .stats {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }}
-
-        .stat-item {{
-            display: flex;
-            flex-direction: column;
-        }}
-
-        .stat-label {{
-            opacity: 0.9;
-            margin-bottom: 5px;
-            font-size: 13px;
-        }}
-
-        .stat-value {{
-            font-size: 24px;
-            font-weight: bold;
-        }}
-
-        .db-mode-badge {{
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 5px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-top: 10px;
-        }}
-
-        .tabs {{
-            display: flex;
-            background: #f8f9fa;
-            border-bottom: 2px solid #e0e0e0;
-        }}
-
-        .tab {{
-            padding: 15px 30px;
-            cursor: pointer;
-            border: none;
-            background: none;
-            font-size: 14px;
-            font-weight: 500;
-            color: #666;
-            transition: all 0.3s;
-            border-bottom: 3px solid transparent;
-        }}
-
-        .tab:hover {{
-            background: #e9ecef;
-            color: #333;
-        }}
-
-        .tab.active {{
-            color: #667eea;
-            border-bottom-color: #667eea;
-            background: white;
-        }}
-
-        .tab-content {{
-            display: none;
-        }}
-
-        .tab-content.active {{
-            display: block;
-        }}
-
-        .controls {{
-            padding: 20px 30px;
-            background: #fafafa;
-            border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }}
-
-        .search-box {{
-            flex: 1;
-            min-width: 300px;
-            padding: 12px;
-            font-size: 14px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            outline: none;
-        }}
-
-        .search-box:focus {{
-            border-color: #667eea;
-        }}
-
-        .filter-group {{
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }}
-
-        .filter-label {{
-            font-size: 13px;
-            color: #666;
-            font-weight: 500;
-        }}
-
-        select {{
-            padding: 8px 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 13px;
-            cursor: pointer;
-            outline: none;
-        }}
-
-        select:focus {{
-            border-color: #667eea;
-        }}
-
-        table {{
-            width: 100%;
-            min-width: 1200px;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }}
-
-        th:nth-child(1) {{ width: 20%; }} /* File Name */
-        th:nth-child(2) {{ width: 8%; }}  /* Type */
-        th:nth-child(3) {{ width: 35%; }} /* Path */
-        th:nth-child(4) {{ width: 13%; }} /* Size */
-        th:nth-child(5) {{ width: 12%; }} /* Modified */
-        th:nth-child(6) {{ width: 12%; }} /* Created */
-
-        th {{
-            background: #f8f9fa;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            color: #333;
-            cursor: pointer;
-            user-select: none;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            border-bottom: 2px solid #ddd;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }}
-
-        th:hover {{
-            background: #e9ecef;
-        }}
-
-        th::after {{
-            content: ' ↕';
-            opacity: 0.3;
-            font-size: 12px;
-        }}
-
-        th.sort-asc::after {{
-            content: ' ↑';
-            opacity: 1;
-        }}
-
-        th.sort-desc::after {{
-            content: ' ↓';
-            opacity: 1;
-        }}
-
-        td {{
-            padding: 12px 15px;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 13px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-
-        tr:hover {{
-            background: #f8f9fa;
-        }}
-
-        .file-icon {{
-            font-size: 18px;
-            margin-right: 8px;
-        }}
-
-        .file-name {{
-            font-weight: 500;
-            color: #333;
-            display: flex;
-            align-items: center;
-        }}
-
-        .file-path {{
-            color: #666;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 12px;
-            word-break: break-all;
-        }}
-
-        .file-extension {{
-            display: inline-block;
-            padding: 3px 10px;
-            background: #e3f2fd;
-            color: #1976d2;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }}
-
-        .size-cell {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-
-        .size-bar-container {{
-            flex: 1;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            overflow: hidden;
-            min-width: 50px;
-            max-width: 100px;
-        }}
-
-        .size-bar {{
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-        }}
-
-        .size-text {{
-            text-align: right;
-            font-family: 'Monaco', 'Courier New', monospace;
-            color: #555;
-            white-space: nowrap;
-            min-width: 70px;
-        }}
-
-        .modified {{
-            color: #666;
-            font-size: 12px;
-            white-space: nowrap;
-        }}
-
-        .no-results {{
-            padding: 40px;
-            text-align: center;
-            color: #999;
-        }}
-
-        .stats-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            padding: 30px;
-        }}
-
-        .stat-card {{
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-        }}
-
-        .stat-card h3 {{
-            font-size: 16px;
-            margin-bottom: 15px;
-            color: #333;
-        }}
-
-        .stat-list {{
-            list-style: none;
-        }}
-
-        .stat-list-item {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }}
-
-        .stat-list-item:last-child {{
-            border-bottom: none;
-        }}
-
-        .stat-list-label {{
-            font-size: 13px;
-            color: #666;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }}
-
-        .stat-list-value {{
-            font-weight: 600;
-            color: #333;
-            font-size: 14px;
-        }}
-
-        .progress-bar {{
-            height: 6px;
-            background: #e0e0e0;
-            border-radius: 3px;
-            overflow: hidden;
-            margin-top: 5px;
-        }}
-
-        .progress-fill {{
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-        }}
-
-        .footer {{
-            padding: 20px 30px;
-            text-align: center;
-            color: #999;
-            font-size: 12px;
-            border-top: 1px solid #e0e0e0;
-        }}
-
-        .result-count {{
-            padding: 10px 30px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 13px;
-            color: #666;
-        }}
-
-        .table-container {{
-            position: relative;
-            height: 600px;
-            overflow-y: auto;
-            overflow-x: auto;
-        }}
-
-        .table-spacer {{
-            position: relative;
-            width: 100%;
-        }}
-
-        .table-viewport {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            will-change: transform;
-        }}
-
-        .loading-overlay {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }}
-
-        .loading-overlay.hidden {{
-            display: none;
-        }}
-
-        .loading-content {{
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            min-width: 400px;
-        }}
-
-        .loading-title {{
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #333;
-        }}
-
-        .loading-progress-bar {{
-            height: 24px;
-            background: #e0e0e0;
-            border-radius: 12px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }}
-
-        .loading-progress-fill {{
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 12px;
-            font-weight: 600;
-        }}
-
-        .loading-stats {{
-            font-size: 13px;
-            color: #666;
-            text-align: center;
-        }}
+{css_common}
+{css_db_mode}
     </style>
 </head>
 <body>
@@ -2180,6 +1840,9 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
             endIndex: 0,
             visibleRows: 0
         }};
+
+        // Common utility functions
+{js_common}
 
         // Initialize sql.js and load database
         async function initDatabase() {{
@@ -2496,34 +2159,6 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
             }}
         }}
 
-        function updateSortHeaders() {{
-            document.querySelectorAll('th[data-column]').forEach(header => {{
-                header.classList.remove('sort-asc', 'sort-desc');
-                if (header.dataset.column === currentSort.column) {{
-                    header.classList.add(currentSort.ascending ? 'sort-asc' : 'sort-desc');
-                }}
-            }});
-        }}
-
-        function throttle(func, limit) {{
-            let inThrottle;
-            return function() {{
-                const args = arguments;
-                const context = this;
-                if (!inThrottle) {{
-                    func.apply(context, args);
-                    inThrottle = true;
-                    setTimeout(() => inThrottle = false, limit);
-                }}
-            }}
-        }}
-
-        function escapeHtml(text) {{
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }}
-
         function formatBytes(bytes) {{
             const units = ['B', 'KB', 'MB', 'GB', 'TB'];
             let size = bytes;
@@ -2542,17 +2177,12 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
 </html>"""
 
     # Generate extension filter options
-    sorted_extensions = sorted(extension_stats.items(), key=lambda x: x[1]['count'], reverse=True)
-    extension_options = '\n'.join(
-        f'<option value="{html_escape_builtin(ext)}">{html_escape_builtin(ext)} ({stats["count"]} files)</option>'
-        for ext, stats in sorted_extensions
-    )
+    extension_options = generate_extension_options(extension_stats)
 
     # Fill in template
-    root_path_obj = Path(root_path)
-    total_file_count = sum(stats['count'] for stats in extension_stats.values())
+    total_file_count = calculate_total_files(extension_stats)
     html_content = html_template.format(
-        root_name=root_path_obj.name or 'root',
+        root_name=get_directory_name(root_path),
         root_path=str(root_path),
         total_files=f"{total_file_count:,}",
         total_size_human=get_size_human_readable(total_size),
@@ -2561,7 +2191,10 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
         generated_datetime=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         extension_options=extension_options,
         db_filename=os.path.basename(db_path),
-        db_size_human=get_size_human_readable(db_size)
+        db_size_human=get_size_human_readable(db_size),
+        css_common=get_common_css(),
+        css_db_mode=get_common_css_db_mode(),
+        js_common=get_common_javascript()
     )
 
     # Write HTML file
@@ -2570,7 +2203,7 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
 
     print(f"\n✓ HTML viewer created: {output_file}")
 
-def generate_server_script(output_dir, html_filename, port=8000):
+def generate_server_script(output_dir, html_filename, port=ServerConfig.DEFAULT_PORT):
     """Generate a simple Python HTTP server script for viewing the database mode files"""
 
     server_script = f'''#!/usr/bin/env python3
@@ -2640,12 +2273,12 @@ if __name__ == "__main__":
     # Make executable on Unix-like systems
     try:
         os.chmod(server_path, 0o755)
-    except:
-        pass  # Windows doesn't support chmod
+    except (NotImplementedError, OSError):
+        pass  # Windows doesn't support chmod or filesystem doesn't support permissions
 
     return server_path
 
-def generate_launcher_scripts(macos_dir, windows_dir, html_filename, port=8000):
+def generate_launcher_scripts(macos_dir, windows_dir, html_filename, port=ServerConfig.DEFAULT_PORT):
     """Generate cross-platform launcher scripts for macOS and Windows"""
 
     # macOS .command script (zsh) - navigates to ../data/
@@ -2730,8 +2363,8 @@ pause
     # Make executable on Unix-like systems
     try:
         os.chmod(macos_path, 0o755)
-    except:
-        pass
+    except (NotImplementedError, OSError):
+        pass  # Not supported on this platform/filesystem
 
     # Write Windows script to Windows directory
     windows_path = os.path.join(windows_dir, 'start.bat')
@@ -2843,7 +2476,7 @@ Modes:
     file_count = len(files_data)
 
     # Determine mode: database vs JSON
-    use_database = args.extdb or (file_count > 200000 and not args.json)
+    use_database = args.extdb or (file_count > DatabaseConfig.FILE_COUNT_THRESHOLD and not args.json)
 
     if use_database:
         # Database mode
@@ -2924,7 +2557,7 @@ Modes:
         print("=" * 60)
 
         # Warn about large datasets in JSON mode
-        if file_count > 200000 and args.json:
+        if file_count > DatabaseConfig.FILE_COUNT_THRESHOLD and args.json:
             print("\n" + "!" * 60)
             print("WARNING: Large dataset in JSON mode!")
             print(f"  Files to archive: {file_count:,}")
