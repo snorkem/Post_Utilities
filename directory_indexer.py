@@ -720,6 +720,287 @@ def get_common_css_db_mode():
         }
 """
 
+def get_browse_mode_css():
+    """Return CSS for browse/hierarchical view"""
+    return """
+        /* Browse Mode Layout */
+        .browse-container {
+            display: flex;
+            height: calc(100vh - 350px);
+            min-height: 500px;
+            gap: 0;
+            position: relative;
+        }
+
+        .browse-sidebar {
+            width: var(--sidebar-width, 30%);
+            min-width: 200px;
+            max-width: 50%;
+            background: #fafafa;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .browse-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .browse-breadcrumb {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .breadcrumb-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            color: #667eea;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .breadcrumb-item:hover {
+            opacity: 0.7;
+        }
+
+        .breadcrumb-item.active {
+            color: #333;
+            cursor: default;
+            font-weight: 500;
+        }
+
+        .breadcrumb-separator {
+            color: #999;
+            margin: 0 5px;
+        }
+
+        .up-button {
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .up-button:hover {
+            background: #f5f5f5;
+            border-color: #667eea;
+        }
+
+        .up-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Tree Styles */
+        .tree {
+            padding: 10px 0;
+        }
+
+        .tree-item {
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .tree-item-content {
+            display: flex;
+            align-items: center;
+            padding: 6px 10px;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .tree-item-content:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .tree-item.selected > .tree-item-content {
+            background: rgba(102, 126, 234, 0.2);
+            font-weight: 500;
+        }
+
+        .tree-toggle {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #666;
+            flex-shrink: 0;
+        }
+
+        .tree-toggle.empty {
+            visibility: hidden;
+        }
+
+        .tree-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .tree-label {
+            flex: 1;
+            font-size: 14px;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tree-badge {
+            font-size: 11px;
+            color: #999;
+            background: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+
+        .tree-size {
+            font-size: 11px;
+            color: #666;
+            flex-shrink: 0;
+        }
+
+        .tree-children {
+            padding-left: 20px;
+            display: none;
+        }
+
+        .tree-item.expanded > .tree-children {
+            display: block;
+        }
+
+        /* Splitter */
+        .browse-splitter {
+            width: 8px;
+            cursor: col-resize;
+            background: #e0e0e0;
+            position: relative;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+
+        .browse-splitter:hover {
+            background: #667eea;
+        }
+
+        .browse-splitter.resizing {
+            background: #667eea;
+        }
+
+        /* Browse controls */
+        .browse-controls {
+            padding: 15px 20px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .browse-search {
+            flex: 1;
+            min-width: 200px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .search-scope {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .search-scope input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        /* Browse file list */
+        .browse-file-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .browse-file-list table {
+            width: 100%;
+        }
+
+        .browse-file-list th:nth-child(1) { width: 40%; }
+        .browse-file-list th:nth-child(2) { width: 10%; }
+        .browse-file-list th:nth-child(3) { width: 20%; }
+        .browse-file-list th:nth-child(4) { width: 15%; }
+        .browse-file-list th:nth-child(5) { width: 15%; }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            color: #999;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        /* Folder row in file list */
+        .folder-row {
+            background: #f9f9f9;
+            font-weight: 500;
+        }
+
+        .folder-row:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .browse-container {
+                flex-direction: column;
+            }
+
+            .browse-sidebar {
+                width: 100% !important;
+                max-width: 100%;
+                height: 300px;
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            .browse-splitter {
+                display: none;
+            }
+        }
+"""
+
 def get_common_javascript():
     """Return common JavaScript utility functions used in both HTML templates"""
     return """
@@ -749,6 +1030,58 @@ def get_common_javascript():
                     header.classList.add(currentSort.ascending ? 'sort-asc' : 'sort-desc');
                 }
             });
+        }
+
+        function formatSize(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let size = bytes;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            return `${size.toFixed(2)} ${units[unitIndex]}`;
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        function compareWithFoldersFirst(a, b, column, ascending, foldersFirst = true) {
+            // If folders-first is enabled, folders always come before files
+            if (foldersFirst) {
+                const aIsFolder = a.type === 'folder' || a.hasOwnProperty('children') || a.hasOwnProperty('fileCount');
+                const bIsFolder = b.type === 'folder' || b.hasOwnProperty('children') || b.hasOwnProperty('fileCount');
+
+                if (aIsFolder && !bIsFolder) return -1;
+                if (!aIsFolder && bIsFolder) return 1;
+            }
+
+            // Within same type, sort by specified column
+            let valA = a[column];
+            let valB = b[column];
+
+            if (column === 'size_bytes' || column === 'size') {
+                valA = a.size_bytes || a.totalSize || 0;
+                valB = b.size_bytes || b.totalSize || 0;
+            }
+
+            if (typeof valA === 'string') {
+                valA = valA.toLowerCase();
+                valB = valB.toLowerCase();
+            }
+
+            if (valA < valB) return ascending ? -1 : 1;
+            if (valA > valB) return ascending ? 1 : -1;
+            return 0;
         }
 """
 
@@ -839,6 +1172,59 @@ def scan_directory(root_path):
     # Convert defaultdict back to regular dict for compatibility
     return files_data, total_size, dict(extension_stats)
 
+def build_directory_tree(files_data, root_path):
+    """
+    Build a hierarchical tree structure from flat file list.
+    Returns a nested dictionary representing the folder hierarchy with metadata.
+    """
+    tree = {
+        'name': Path(root_path).name or str(root_path),
+        'path': '',
+        'type': 'folder',
+        'children': {},
+        'file_count': 0,
+        'total_size': 0,
+        'files': []
+    }
+
+    for file_info in files_data:
+        # Split the relative path into parts
+        rel_path = file_info['relative_path']
+        if rel_path == '.':
+            # File is in root directory
+            tree['files'].append(file_info)
+            tree['file_count'] += 1
+            tree['total_size'] += file_info['size_bytes']
+            continue
+
+        parts = Path(rel_path).parts
+        current = tree
+
+        # Navigate/create folder structure
+        for i, part in enumerate(parts[:-1]):  # Exclude filename
+            if part not in current['children']:
+                current['children'][part] = {
+                    'name': part,
+                    'path': str(Path(*parts[:i+1])),
+                    'type': 'folder',
+                    'children': {},
+                    'file_count': 0,
+                    'total_size': 0,
+                    'files': []
+                }
+            current = current['children'][part]
+
+        # Add file to its parent folder
+        current['files'].append(file_info)
+        current['file_count'] += 1
+        current['total_size'] += file_info['size_bytes']
+
+        # Update root tree counts (already includes everything)
+        tree['file_count'] += 1
+        tree['total_size'] += file_info['size_bytes']
+
+    return tree
+
 def create_database(files_data, total_size, extension_stats, root_path, db_path):
     """Create SQLite database with file information"""
     print(f"\nCreating SQLite database: {db_path}")
@@ -888,6 +1274,12 @@ def create_database(files_data, total_size, extension_stats, root_path, db_path)
     cursor.execute('CREATE INDEX idx_modified ON files(modified)')
     cursor.execute('CREATE INDEX idx_created ON files(created)')
     cursor.execute('CREATE INDEX idx_name ON files(name)')
+    cursor.execute('CREATE INDEX idx_directory ON files(directory)')
+
+    # Indexes for hierarchical queries and search performance
+    cursor.execute('CREATE INDEX idx_directory_name ON files(directory, name)')
+    cursor.execute('CREATE INDEX idx_name_lower ON files(LOWER(name))')
+    cursor.execute('CREATE INDEX idx_directory_lower ON files(LOWER(directory))')
 
     # Insert metadata
     cursor.execute('INSERT INTO metadata (key, value) VALUES (?, ?)',
@@ -927,7 +1319,7 @@ def create_database(files_data, total_size, extension_stats, root_path, db_path)
 
 def generate_html(files_data, root_path, total_size, extension_stats, output_file):
     """Generate interactive HTML file"""
-    
+
     html_template = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -937,6 +1329,7 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
     <style>
 {css_common}
 {css_inline_mode}
+{css_browse_mode}
     </style>
 </head>
 <body>
@@ -963,12 +1356,13 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
                 </div>
             </div>
         </div>
-        
+
         <div class="tabs">
             <button class="tab active" data-tab="files">📋 All Files</button>
+            <button class="tab" data-tab="browse">🗂️ Browse</button>
             <button class="tab" data-tab="stats">📊 Statistics</button>
         </div>
-        
+
         <div id="filesTab" class="tab-content active">
             <div class="controls">
                 <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search files by name, path, or extension...">
@@ -1057,7 +1451,48 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
                 </div>
             </div>
         </div>
-        
+
+        <div id="browseTab" class="tab-content">
+            <div class="browse-container">
+                <div class="browse-sidebar">
+                    <div class="tree" id="folderTree"></div>
+                </div>
+                <div class="browse-splitter" id="browseSplitter"></div>
+                <div class="browse-main">
+                    <div class="browse-breadcrumb" id="browseBreadcrumb">
+                        <button class="up-button" id="upButton" disabled>↑ Up</button>
+                        <span class="breadcrumb-item active" data-path="">📁 {root_name}</span>
+                    </div>
+                    <div class="browse-controls">
+                        <input type="text" id="browseSearchBox" class="browse-search" placeholder="🔍 Search files...">
+                        <label class="search-scope">
+                            <input type="checkbox" id="searchAllFolders">
+                            Search all folders
+                        </label>
+                    </div>
+                    <div class="browse-file-list" id="browseFileList">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-column="name">Name</th>
+                                    <th data-column="extension">Type</th>
+                                    <th data-column="size">Size</th>
+                                    <th data-column="modified">Modified</th>
+                                    <th data-column="created">Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="browseTableBody">
+                            </tbody>
+                        </table>
+                        <div class="empty-state" id="browseEmptyState" style="display: none;">
+                            <div class="empty-state-icon">📂</div>
+                            <div>No files in this folder</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="statsTab" class="tab-content">
             <div class="stats-grid">
                 <div class="stat-card">
@@ -1471,65 +1906,1081 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
             }}).join('');
         }}
 
-        // Add scroll event listener for virtual scrolling
-        document.getElementById('tableContainer').addEventListener('scroll', throttle(renderTable, 16));
+        // Add scroll event listener for virtual scrolling (with error handling)
+        try {{
+            const tableContainer = document.getElementById('tableContainer');
+            if (tableContainer) {{
+                tableContainer.addEventListener('scroll', throttle(renderTable, 16));
+            }} else {{
+                console.error('tableContainer element not found');
+            }}
+        }} catch (error) {{
+            console.error('Error setting up scroll listener:', error);
+        }}
 
         // Progressive chunk loading function
         function loadNextChunk() {{
-            if (chunksLoaded >= totalChunks) {{
-                // All chunks loaded - hide overlay
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                return;
+            try {{
+                console.log(`Loading chunk ${{chunksLoaded + 1}} of ${{totalChunks}}`);
+
+                if (chunksLoaded >= totalChunks) {{
+                    // All chunks loaded - hide overlay
+                    console.log('All chunks loaded, hiding overlay');
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    return;
+                }}
+
+                // Load current chunk
+                const chunk = dataChunks[chunksLoaded];
+                if (!chunk) {{
+                    console.error(`Chunk ${{chunksLoaded}} is undefined`);
+                    chunksLoaded++;
+                    setTimeout(loadNextChunk, 50);
+                    return;
+                }}
+
+                tableData.push(...chunk);
+                chunksLoaded++;
+
+                // Update progress
+                const progress = Math.round((chunksLoaded / totalChunks) * 100);
+                const progressFill = document.getElementById('loadingProgressFill');
+                const loadingStats = document.getElementById('loadingStats');
+
+                if (progressFill && loadingStats) {{
+                    progressFill.style.width = progress + '%';
+                    progressFill.textContent = progress + '%';
+                    loadingStats.textContent = `Loaded ${{tableData.length.toLocaleString()}} of ${{totalFiles.toLocaleString()}} files...`;
+                }}
+
+                // Update maxFileSize incrementally (only check current chunk)
+                if (chunk.length > 0) {{
+                    const chunkMax = Math.max(...chunk.map(f => f.size_bytes || 0));
+                    maxFileSize = Math.max(maxFileSize, chunkMax);
+                }}
+
+                // Update filtered data
+                filteredData = [...tableData];
+
+                // Initialize UI on first chunk
+                if (chunksLoaded === 1) {{
+                    try {{
+                        updateSortHeaders();
+                        initColumnResize();
+                        initPathTooltips();
+                    }} catch (initError) {{
+                        console.error('Error during initialization:', initError);
+                    }}
+                }}
+
+                // Update table
+                try {{
+                    renderTable();
+                }} catch (renderError) {{
+                    console.error('Error rendering table:', renderError);
+                }}
+
+                // Load next chunk with small delay to keep UI responsive
+                setTimeout(loadNextChunk, 50);
+
+            }} catch (error) {{
+                console.error(`Error in loadNextChunk (chunk ${{chunksLoaded}}):`, error);
+                // Continue to next chunk to avoid getting stuck
+                chunksLoaded++;
+                if (chunksLoaded < totalChunks) {{
+                    setTimeout(loadNextChunk, 50);
+                }} else {{
+                    // Force hide overlay on error
+                    try {{
+                        document.getElementById('loadingOverlay').classList.add('hidden');
+                    }} catch (e) {{
+                        console.error('Could not hide loading overlay:', e);
+                    }}
+                }}
             }}
-
-            // Load current chunk
-            const chunk = dataChunks[chunksLoaded];
-            tableData.push(...chunk);
-            chunksLoaded++;
-
-            // Update progress
-            const progress = Math.round((chunksLoaded / totalChunks) * 100);
-            const progressFill = document.getElementById('loadingProgressFill');
-            const loadingStats = document.getElementById('loadingStats');
-
-            progressFill.style.width = progress + '%';
-            progressFill.textContent = progress + '%';
-            loadingStats.textContent = `Loaded ${{tableData.length.toLocaleString()}} of ${{totalFiles.toLocaleString()}} files...`;
-
-            // Update maxFileSize incrementally (only check current chunk)
-            if (chunk.length > 0) {{
-                const chunkMax = Math.max(...chunk.map(f => f.size_bytes || 0));
-                maxFileSize = Math.max(maxFileSize, chunkMax);
-            }}
-
-            // Update filtered data
-            filteredData = [...tableData];
-
-            // Initialize UI on first chunk
-            if (chunksLoaded === 1) {{
-                updateSortHeaders();
-                initColumnResize();
-                initPathTooltips();
-            }}
-
-            // Update table
-            renderTable();
-
-            // Load next chunk with small delay to keep UI responsive
-            setTimeout(loadNextChunk, 50);
         }}
 
         // Start loading chunks
+        console.log(`Starting chunk loading: ${{totalChunks}} chunks, ${{totalFiles}} total files`);
         if (totalChunks > 0) {{
-            loadNextChunk();
+            try {{
+                loadNextChunk();
+            }} catch (error) {{
+                console.error('Error starting chunk loading:', error);
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }}
         }} else {{
             // No data
-            document.getElementById('loadingOverlay').classList.add('hidden');
-            updateSortHeaders();
-            renderTable();
-            initColumnResize();
-            initPathTooltips();
+            console.log('No chunks to load');
+            try {{
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                updateSortHeaders();
+                renderTable();
+                initColumnResize();
+                initPathTooltips();
+            }} catch (error) {{
+                console.error('Error in no-data initialization:', error);
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }}
         }}
+
+        // ====================================================================
+        // Browse Mode (Hierarchical File Browser)
+        // ====================================================================
+
+        // State Management Class
+        class BrowseState {{
+            constructor() {{
+                this.currentPath = '';
+                this.expandedFolders = new Set();
+                this.currentSort = {{ column: 'name', ascending: true, foldersFirst: true }};
+                this.searchQuery = '';
+                this.searchScope = 'local'; // 'local' or 'global'
+                this.listeners = [];
+            }}
+
+            // Observer pattern for state changes
+            onChange(listener) {{
+                this.listeners.push(listener);
+            }}
+
+            notify() {{
+                this.listeners.forEach(fn => fn(this));
+            }}
+
+            // State mutations with notifications
+            setPath(path) {{
+                this.currentPath = path;
+                this.notify();
+            }}
+
+            toggleFolder(path) {{
+                if (this.expandedFolders.has(path)) {{
+                    this.expandedFolders.delete(path);
+                }} else {{
+                    this.expandedFolders.add(path);
+                }}
+                this.notify();
+            }}
+
+            setSort(column, ascending, foldersFirst = true) {{
+                this.currentSort = {{ column, ascending, foldersFirst }};
+                localStorage.setItem('browseSort', JSON.stringify(this.currentSort));
+                this.notify();
+            }}
+
+            setSearch(query, scope) {{
+                this.searchQuery = query;
+                this.searchScope = scope;
+                this.notify();
+            }}
+
+            // Restore from localStorage
+            static restore() {{
+                const state = new BrowseState();
+                const savedSort = localStorage.getItem('browseSort');
+                if (savedSort) {{
+                    try {{
+                        state.currentSort = JSON.parse(savedSort);
+                    }} catch (e) {{
+                        console.warn('Failed to restore sort preferences:', e);
+                    }}
+                }}
+                const savedExpanded = localStorage.getItem('browseExpandedFolders');
+                if (savedExpanded) {{
+                    try {{
+                        const expanded = JSON.parse(savedExpanded);
+                        state.expandedFolders = new Set(expanded);
+                    }} catch (e) {{
+                        console.warn('Failed to restore expanded folders:', e);
+                    }}
+                }}
+                return state;
+            }}
+
+            // Save state to localStorage
+            save() {{
+                localStorage.setItem('browseExpandedFolders', JSON.stringify(Array.from(this.expandedFolders)));
+            }}
+        }}
+
+        // Data Access Layer
+        class DataService {{
+            constructor(mode, dataSource) {{
+                this.mode = mode; // 'inline' or 'database'
+                this.dataSource = dataSource; // directoryTree or db instance
+            }}
+
+            async getFolder(path) {{
+                if (this.mode === 'inline') {{
+                    return this._getFolderInline(path);
+                }} else {{
+                    return await this._getFolderFromDB(path);
+                }}
+            }}
+
+            async getFiles(path, options = {{}}) {{
+                const defaults = {{
+                    sort: {{ column: 'name', ascending: true, foldersFirst: true }},
+                    search: '',
+                    limit: 1000,
+                    offset: 0
+                }};
+                const opts = {{ ...defaults, ...options }};
+
+                if (this.mode === 'inline') {{
+                    return this._getFilesInline(path, opts);
+                }} else {{
+                    return await this._getFilesFromDB(path, opts);
+                }}
+            }}
+
+            async searchGlobal(query) {{
+                if (this.mode === 'inline') {{
+                    return this._searchInline(query);
+                }} else {{
+                    return await this._searchDB(query);
+                }}
+            }}
+
+            // ============ INLINE MODE IMPLEMENTATIONS ============
+
+            _getFolderInline(path) {{
+                let node = this.dataSource; // directoryTree root
+                if (path) {{
+                    const parts = path.split('/');
+                    for (const part of parts) {{
+                        node = node.children[part];
+                        if (!node) return null;
+                    }}
+                }}
+                return {{
+                    name: node.name,
+                    path: path,
+                    fileCount: node.file_count,
+                    totalSize: node.total_size,
+                    children: Object.keys(node.children || {{}}),
+                    files: node.files || []
+                }};
+            }}
+
+            _getFilesInline(path, opts) {{
+                const folder = this._getFolderInline(path);
+                if (!folder) return {{ items: [], total: 0 }};
+
+                let files = [...folder.files];
+
+                // Apply search filter to files
+                if (opts.search) {{
+                    const query = opts.search.toLowerCase();
+                    files = files.filter(f =>
+                        f.name.toLowerCase().includes(query) ||
+                        f.extension.toLowerCase().includes(query)
+                    );
+                }}
+
+                // Get child folders
+                let folders = folder.children.map(name => {{
+                    const childPath = path ? `${{path}}/${{name}}` : name;
+                    const childFolder = this._getFolderInline(childPath);
+                    return {{
+                        type: 'folder',
+                        name: name,
+                        fileCount: childFolder.fileCount,
+                        totalSize: childFolder.totalSize,
+                        path: childPath
+                    }};
+                }});
+
+                // Apply search filter to folders
+                if (opts.search) {{
+                    const query = opts.search.toLowerCase();
+                    folders = folders.filter(f => f.name.toLowerCase().includes(query));
+                }}
+
+                // Sort folders and files separately
+                folders = this._sortItems(folders, opts.sort);
+                files = this._sortItems(files, opts.sort);
+
+                // Combine with folders first (if foldersFirst is enabled)
+                const combined = opts.sort.foldersFirst ? [...folders, ...files] : [...folders, ...files].sort((a, b) =>
+                    compareWithFoldersFirst(a, b, opts.sort.column, opts.sort.ascending, false)
+                );
+
+                const total = combined.length;
+
+                // Apply pagination
+                const paginated = combined.slice(opts.offset, opts.offset + opts.limit);
+
+                return {{ items: paginated, total }};
+            }}
+
+            _searchInline(query) {{
+                const results = [];
+                const queryLower = query.toLowerCase();
+
+                const searchNode = (node, currentPath) => {{
+                    // Search files in current node
+                    (node.files || []).forEach(file => {{
+                        if (file.name.toLowerCase().includes(queryLower) ||
+                            file.extension.toLowerCase().includes(queryLower)) {{
+                            results.push({{
+                                ...file,
+                                path: currentPath,
+                                type: 'file'
+                            }});
+                        }}
+                    }});
+
+                    // Search folder names and recurse
+                    Object.entries(node.children || {{}}).forEach(([name, child]) => {{
+                        const childPath = currentPath ? `${{currentPath}}/${{name}}` : name;
+                        if (name.toLowerCase().includes(queryLower)) {{
+                            results.push({{
+                                type: 'folder',
+                                name: name,
+                                path: childPath,
+                                fileCount: child.file_count,
+                                totalSize: child.total_size
+                            }});
+                        }}
+                        searchNode(child, childPath);
+                    }});
+                }};
+
+                searchNode(this.dataSource, '');
+                return results.slice(0, 1000); // Limit to 1000 results
+            }}
+
+            _sortItems(items, sort) {{
+                return items.sort((a, b) =>
+                    compareWithFoldersFirst(a, b, sort.column, sort.ascending, false)
+                );
+            }}
+
+            // ============ DATABASE MODE IMPLEMENTATIONS ============
+            // (To be implemented in Phase 4)
+
+            async _getFolderFromDB(path) {{
+                // TODO: Implement database folder queries
+                console.warn('Database mode not yet implemented for browse');
+                return {{ name: 'root', path: '', fileCount: 0, totalSize: 0, children: [], files: [] }};
+            }}
+
+            async _getFilesFromDB(path, opts) {{
+                // TODO: Implement database file queries
+                console.warn('Database mode not yet implemented for browse');
+                return {{ items: [], total: 0 }};
+            }}
+
+            async _searchDB(query) {{
+                // TODO: Implement database search
+                console.warn('Database mode search not yet implemented');
+                return [];
+            }}
+        }}
+
+        const directoryTree = {directory_tree_json};
+        let currentFolder = directoryTree;
+        const browseState = BrowseState.restore();
+        let currentPath = browseState.currentPath;
+        let expandedFolders = browseState.expandedFolders;
+
+        // Initialize DataService with inline mode
+        const dataService = new DataService('inline', directoryTree);
+
+        // Browse Controller - UI Logic
+        class BrowseController {{
+            constructor(dataService, state) {{
+                this.dataService = dataService;
+                this.state = state;
+                this.searchDebounce = null;
+                this.currentFolder = null;
+
+                // Listen to state changes
+                state.onChange(() => this.handleStateChange());
+            }}
+
+            async init() {{
+                this.setupEventListeners();
+                await this.navigateToFolder('');
+            }}
+
+            handleStateChange() {{
+                // State changed, re-render if needed
+                // For now, renders are triggered explicitly
+            }}
+
+            async navigateToFolder(path) {{
+                this.state.setPath(path);
+                const folder = await this.dataService.getFolder(path);
+                this.currentFolder = folder;
+                await this.render();
+            }}
+
+            async navigateUp() {{
+                if (!this.state.currentPath) return;
+                const parts = this.state.currentPath.split('/');
+                parts.pop();
+                await this.navigateToFolder(parts.join('/'));
+            }}
+
+            async sort(column) {{
+                const current = this.state.currentSort;
+                const ascending = current.column === column ? !current.ascending : true;
+                this.state.setSort(column, ascending, true);
+                await this.renderFileList();
+            }}
+
+            async search(query, scope) {{
+                clearTimeout(this.searchDebounce);
+                this.searchDebounce = setTimeout(async () => {{
+                    this.state.setSearch(query, scope);
+                    if (scope === 'global' && query) {{
+                        await this.renderGlobalSearch(query);
+                    }} else {{
+                        await this.renderFileList();
+                    }}
+                }}, 300);
+            }}
+
+            async render() {{
+                await this.renderTree();
+                await this.renderBreadcrumb();
+                await this.renderFileList();
+            }}
+
+            async renderTree() {{
+                const treeContainer = document.getElementById('folderTree');
+                treeContainer.innerHTML = '';
+                await this._renderTreeNode(this.dataService.dataSource, treeContainer, '');
+            }}
+
+            async _renderTreeNode(node, parentElement, path) {{
+                const hasChildren = Object.keys(node.children || {{}}).length > 0;
+                const isExpanded = this.state.expandedFolders.has(path);
+
+                const treeItem = document.createElement('div');
+                treeItem.className = 'tree-item' + (isExpanded ? ' expanded' : '') + (this.state.currentPath === path ? ' selected' : '');
+                treeItem.dataset.path = path;
+
+                const content = document.createElement('div');
+                content.className = 'tree-item-content';
+
+                // Toggle icon
+                const toggle = document.createElement('div');
+                toggle.className = 'tree-toggle' + (hasChildren ? '' : ' empty');
+                toggle.textContent = hasChildren ? (isExpanded ? '▼' : '▶') : '';
+                content.appendChild(toggle);
+
+                // Folder icon
+                const icon = document.createElement('span');
+                icon.className = 'tree-icon';
+                icon.textContent = '📁';
+                content.appendChild(icon);
+
+                // Label
+                const label = document.createElement('span');
+                label.className = 'tree-label';
+                label.textContent = node.name;
+                label.title = node.name;
+                content.appendChild(label);
+
+                // File count badge
+                if (node.file_count > 0) {{
+                    const badge = document.createElement('span');
+                    badge.className = 'tree-badge';
+                    badge.textContent = node.file_count;
+                    content.appendChild(badge);
+                }}
+
+                // Folder size
+                const size = document.createElement('span');
+                size.className = 'tree-size';
+                size.textContent = formatSize(node.total_size);
+                content.appendChild(size);
+
+                treeItem.appendChild(content);
+
+                // Click handler
+                content.addEventListener('click', async (e) => {{
+                    e.stopPropagation();
+
+                    if (hasChildren && (e.target === toggle || e.target === icon)) {{
+                        this.state.toggleFolder(path);
+                        this.state.save();
+                        await this.renderTree();
+                    }} else {{
+                        await this.navigateToFolder(path);
+                    }}
+                }});
+
+                parentElement.appendChild(treeItem);
+
+                // Render children if expanded
+                if (hasChildren && isExpanded) {{
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'tree-children';
+                    treeItem.appendChild(childrenContainer);
+
+                    const sortedChildren = Object.entries(node.children).sort((a, b) =>
+                        a[1].name.localeCompare(b[1].name)
+                    );
+
+                    for (const [childName, childNode] of sortedChildren) {{
+                        const childPath = path ? `${{path}}/${{childName}}` : childName;
+                        await this._renderTreeNode(childNode, childrenContainer, childPath);
+                    }}
+                }}
+            }}
+
+            async renderBreadcrumb() {{
+                const breadcrumb = document.getElementById('browseBreadcrumb');
+                const upButton = document.getElementById('upButton');
+
+                breadcrumb.innerHTML = '';
+                breadcrumb.appendChild(upButton);
+
+                upButton.disabled = !this.state.currentPath;
+
+                const parts = this.state.currentPath ? this.state.currentPath.split('/') : [];
+
+                // Root
+                const rootItem = document.createElement('span');
+                rootItem.className = 'breadcrumb-item' + (this.state.currentPath === '' ? ' active' : '');
+                rootItem.textContent = `📁 ${{this.dataService.dataSource.name}}`;
+                rootItem.dataset.path = '';
+                if (this.state.currentPath !== '') {{
+                    rootItem.addEventListener('click', () => this.navigateToFolder(''));
+                }}
+                breadcrumb.appendChild(rootItem);
+
+                // Path parts
+                parts.forEach((part, index) => {{
+                    const separator = document.createElement('span');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '/';
+                    breadcrumb.appendChild(separator);
+
+                    const partPath = parts.slice(0, index + 1).join('/');
+                    const item = document.createElement('span');
+                    item.className = 'breadcrumb-item' + (partPath === this.state.currentPath ? ' active' : '');
+                    item.textContent = part;
+                    item.dataset.path = partPath;
+                    if (partPath !== this.state.currentPath) {{
+                        item.addEventListener('click', () => this.navigateToFolder(partPath));
+                    }}
+                    breadcrumb.appendChild(item);
+                }});
+            }}
+
+            async renderFileList() {{
+                const {{ items, total }} = await this.dataService.getFiles(
+                    this.state.currentPath,
+                    {{
+                        sort: this.state.currentSort,
+                        search: this.state.searchScope === 'local' ? this.state.searchQuery : '',
+                        limit: 1000,
+                        offset: 0
+                    }}
+                );
+
+                const tbody = document.getElementById('browseTableBody');
+                const emptyState = document.getElementById('browseEmptyState');
+
+                tbody.innerHTML = '';
+
+                if (items.length === 0) {{
+                    tbody.style.display = 'none';
+                    emptyState.style.display = 'flex';
+                    return;
+                }}
+
+                tbody.style.display = '';
+                emptyState.style.display = 'none';
+
+                items.forEach(item => {{
+                    const row = this._createFileRow(item);
+                    tbody.appendChild(row);
+                }});
+
+                // Update count
+                const browseFileCountEl = document.getElementById('browseFileCount');
+                if (browseFileCountEl) browseFileCountEl.textContent = `${{total}} items`;
+            }}
+
+            async renderGlobalSearch(query) {{
+                const results = await this.dataService.searchGlobal(query);
+
+                const tbody = document.getElementById('browseTableBody');
+                const emptyState = document.getElementById('browseEmptyState');
+
+                tbody.innerHTML = '';
+
+                if (results.length === 0) {{
+                    tbody.style.display = 'none';
+                    emptyState.style.display = 'flex';
+                    return;
+                }}
+
+                tbody.style.display = '';
+                emptyState.style.display = 'none';
+
+                // Group results by folder
+                const grouped = this._groupByFolder(results);
+
+                Object.entries(grouped).forEach(([folderPath, items]) => {{
+                    // Add folder header
+                    const header = document.createElement('tr');
+                    header.className = 'search-folder-header';
+                    header.innerHTML = `<td colspan="5" style="background: #f0f0f0; font-weight: 600; padding: 10px;">📁 ${{folderPath || 'Root'}}</td>`;
+                    tbody.appendChild(header);
+
+                    // Add files
+                    items.forEach(item => {{
+                        const row = this._createFileRow(item);
+                        tbody.appendChild(row);
+                    }});
+                }});
+
+                // Show result count
+                const browseFileCountEl = document.getElementById('browseFileCount');
+                if (browseFileCountEl) browseFileCountEl.textContent = `${{results.length}} results (limited to 1000)`;
+            }}
+
+            _createFileRow(item) {{
+                const row = document.createElement('tr');
+                if (item.type === 'folder') {{
+                    row.className = 'folder-row';
+                    row.innerHTML = `
+                        <td>
+                            <div class="file-name">
+                                <span class="file-icon">📁</span>
+                                <span>${{escapeHtml(item.name)}}</span>
+                            </div>
+                        </td>
+                        <td><span class="file-extension">folder</span></td>
+                        <td>${{formatSize(item.totalSize)}}</td>
+                        <td>${{item.fileCount}} files</td>
+                        <td>-</td>
+                    `;
+                    row.style.cursor = 'pointer';
+                    row.addEventListener('click', () => {{
+                        this.navigateToFolder(item.path);
+                        this.state.expandedFolders.add(this.state.currentPath);
+                        this.state.save();
+                        this.renderTree();
+                    }});
+                }} else {{
+                    row.innerHTML = `
+                        <td>
+                            <div class="file-name">
+                                <span class="file-icon">${{item.icon}}</span>
+                                <span>${{escapeHtml(item.name)}}</span>
+                            </div>
+                        </td>
+                        <td><span class="file-extension">${{escapeHtml(item.extension)}}</span></td>
+                        <td>${{item.size_human}}</td>
+                        <td class="modified">${{item.modified}}</td>
+                        <td class="modified">${{item.created}}</td>
+                    `;
+                }}
+                return row;
+            }}
+
+            _groupByFolder(items) {{
+                const grouped = {{}};
+                items.forEach(item => {{
+                    const folder = item.directory || item.path || '';
+                    if (!grouped[folder]) {{
+                        grouped[folder] = [];
+                    }}
+                    grouped[folder].push(item);
+                }});
+                return grouped;
+            }}
+
+            setupEventListeners() {{
+                // Search box
+                const searchBox = document.getElementById('browseSearchBox');
+                const searchAllCheckbox = document.getElementById('searchAllFolders');
+
+                if (searchBox) {{
+                    searchBox.addEventListener('input', (e) => {{
+                        const scope = (searchAllCheckbox && searchAllCheckbox.checked) ? 'global' : 'local';
+                        this.search(e.target.value, scope);
+                    }});
+                }}
+
+                if (searchAllCheckbox) {{
+                    searchAllCheckbox.addEventListener('change', (e) => {{
+                        const query = (searchBox && searchBox.value) || '';
+                        const scope = e.target.checked ? 'global' : 'local';
+                        this.search(query, scope);
+                    }});
+                }}
+
+                // Up button
+                const upButton = document.getElementById('upButton');
+                if (upButton) {{
+                    upButton.addEventListener('click', () => this.navigateUp());
+                }}
+
+                // Sort headers (will add sort indicators later)
+                document.querySelectorAll('#browseFileList th[data-column]').forEach(header => {{
+                    header.addEventListener('click', () => {{
+                        this.sort(header.dataset.column);
+                    }});
+                }});
+
+                // Splitter resize
+                this.setupSplitterResize();
+            }}
+
+            setupSplitterResize() {{
+                const splitter = document.getElementById('browseSplitter');
+                const sidebar = document.querySelector('.browse-sidebar');
+                let isResizing = false;
+
+                if (!splitter) return;
+
+                splitter.addEventListener('mousedown', (e) => {{
+                    isResizing = true;
+                    splitter.classList.add('resizing');
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                }});
+
+                document.addEventListener('mousemove', (e) => {{
+                    if (!isResizing) return;
+                    const container = document.querySelector('.browse-container');
+                    if (!container) return;
+
+                    const containerRect = container.getBoundingClientRect();
+                    const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+                    if (newWidth >= 15 && newWidth <= 50) {{
+                        document.documentElement.style.setProperty('--sidebar-width', newWidth + '%');
+                        localStorage.setItem('browseSidebarWidth', newWidth);
+                    }}
+                }});
+
+                document.addEventListener('mouseup', () => {{
+                    if (isResizing) {{
+                        isResizing = false;
+                        splitter.classList.remove('resizing');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                    }}
+                }});
+
+                // Restore sidebar width
+                const savedWidth = localStorage.getItem('browseSidebarWidth');
+                if (savedWidth) {{
+                    document.documentElement.style.setProperty('--sidebar-width', savedWidth + '%');
+                }}
+            }}
+        }}
+
+        // Initialize browse controller
+        const browseController = new BrowseController(dataService, browseState);
+
+        // OLD FUNCTIONS BELOW - TO BE REMOVED AFTER TESTING
+        // Keeping temporarily for compatibility
+
+        // Render folder tree
+        function renderTree(node, parentElement, path = '') {{
+            const hasChildren = Object.keys(node.children || {{}}).length > 0;
+            const isExpanded = expandedFolders.has(path);
+
+            const treeItem = document.createElement('div');
+            treeItem.className = 'tree-item' + (isExpanded ? ' expanded' : '') + (currentPath === path ? ' selected' : '');
+            treeItem.dataset.path = path;
+
+            const content = document.createElement('div');
+            content.className = 'tree-item-content';
+
+            // Toggle icon
+            const toggle = document.createElement('div');
+            toggle.className = 'tree-toggle' + (hasChildren ? '' : ' empty');
+            toggle.textContent = hasChildren ? (isExpanded ? '▼' : '▶') : '';
+            content.appendChild(toggle);
+
+            // Folder icon
+            const icon = document.createElement('span');
+            icon.className = 'tree-icon';
+            icon.textContent = '📁';
+            content.appendChild(icon);
+
+            // Label
+            const label = document.createElement('span');
+            label.className = 'tree-label';
+            label.textContent = node.name;
+            label.title = node.name;
+            content.appendChild(label);
+
+            // File count badge
+            if (node.file_count > 0) {{
+                const badge = document.createElement('span');
+                badge.className = 'tree-badge';
+                badge.textContent = node.file_count;
+                content.appendChild(badge);
+            }}
+
+            // Folder size
+            const size = document.createElement('span');
+            size.className = 'tree-size';
+            size.textContent = formatSize(node.total_size);
+            content.appendChild(size);
+
+            treeItem.appendChild(content);
+
+            // Click handler
+            content.addEventListener('click', (e) => {{
+                e.stopPropagation();
+
+                // Toggle expand/collapse if clicking on toggle area
+                if (hasChildren && (e.target === toggle || e.target === icon)) {{
+                    if (isExpanded) {{
+                        expandedFolders.delete(path);
+                    }} else {{
+                        expandedFolders.add(path);
+                    }}
+                    renderFullTree();
+                }} else {{
+                    // Navigate to folder
+                    selectFolder(path);
+                }}
+            }});
+
+            parentElement.appendChild(treeItem);
+
+            // Render children if expanded
+            if (hasChildren && isExpanded) {{
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'tree-children';
+                treeItem.appendChild(childrenContainer);
+
+                const sortedChildren = Object.entries(node.children).sort((a, b) =>
+                    a[1].name.localeCompare(b[1].name)
+                );
+
+                sortedChildren.forEach(([childName, childNode]) => {{
+                    const childPath = path ? `${{path}}/${{childName}}` : childName;
+                    renderTree(childNode, childrenContainer, childPath);
+                }});
+            }}
+        }}
+
+        function renderFullTree() {{
+            const treeContainer = document.getElementById('folderTree');
+            treeContainer.innerHTML = '';
+            renderTree(directoryTree, treeContainer, '');
+        }}
+
+        function selectFolder(path) {{
+            currentPath = path;
+
+            // Find the folder node
+            let folder = directoryTree;
+            if (path) {{
+                const parts = path.split('/');
+                for (const part of parts) {{
+                    folder = folder.children[part];
+                    if (!folder) break;
+                }}
+            }}
+
+            if (folder) {{
+                currentFolder = folder;
+                renderFullTree();
+                renderBreadcrumb(path);
+                renderFileList(folder);
+            }}
+        }}
+
+        function renderBreadcrumb(path) {{
+            const breadcrumb = document.getElementById('browseBreadcrumb');
+            const upButton = document.getElementById('upButton');
+
+            breadcrumb.innerHTML = '';
+            breadcrumb.appendChild(upButton);
+
+            // Enable/disable up button
+            upButton.disabled = !path;
+
+            // Build breadcrumb items
+            const parts = path ? path.split('/') : [];
+
+            // Root
+            const rootItem = document.createElement('span');
+            rootItem.className = 'breadcrumb-item' + (path === '' ? ' active' : '');
+            rootItem.textContent = `📁 ${{directoryTree.name}}`;
+            rootItem.dataset.path = '';
+            if (path !== '') {{
+                rootItem.addEventListener('click', () => selectFolder(''));
+            }}
+            breadcrumb.appendChild(rootItem);
+
+            // Path parts
+            parts.forEach((part, index) => {{
+                const separator = document.createElement('span');
+                separator.className = 'breadcrumb-separator';
+                separator.textContent = '/';
+                breadcrumb.appendChild(separator);
+
+                const partPath = parts.slice(0, index + 1).join('/');
+                const item = document.createElement('span');
+                item.className = 'breadcrumb-item' + (partPath === path ? ' active' : '');
+                item.textContent = part;
+                item.dataset.path = partPath;
+                if (partPath !== path) {{
+                    item.addEventListener('click', () => selectFolder(partPath));
+                }}
+                breadcrumb.appendChild(item);
+            }});
+        }}
+
+        function renderFileList(folder) {{
+            const tbody = document.getElementById('browseTableBody');
+            const emptyState = document.getElementById('browseEmptyState');
+
+            tbody.innerHTML = '';
+
+            const files = folder.files || [];
+            const hasSubfolders = Object.keys(folder.children || {{}}).length > 0;
+
+            if (files.length === 0 && !hasSubfolders) {{
+                tbody.style.display = 'none';
+                emptyState.style.display = 'flex';
+                return;
+            }}
+
+            tbody.style.display = '';
+            emptyState.style.display = 'none';
+
+            // Render subfolders first
+            if (hasSubfolders) {{
+                const sortedFolders = Object.entries(folder.children).sort((a, b) =>
+                    a[1].name.localeCompare(b[1].name)
+                );
+
+                sortedFolders.forEach(([name, childFolder]) => {{
+                    const row = document.createElement('tr');
+                    row.className = 'folder-row';
+                    row.innerHTML = `
+                        <td>
+                            <div class="file-name">
+                                <span class="file-icon">📁</span>
+                                <span>${{escapeHtml(name)}}</span>
+                            </div>
+                        </td>
+                        <td><span class="file-extension">folder</span></td>
+                        <td>${{formatSize(childFolder.total_size)}}</td>
+                        <td>${{childFolder.file_count}} files</td>
+                        <td>-</td>
+                    `;
+                    row.style.cursor = 'pointer';
+                    row.addEventListener('click', () => {{
+                        const folderPath = currentPath ? `${{currentPath}}/${{name}}` : name;
+                        selectFolder(folderPath);
+                        expandedFolders.add(currentPath);
+                        renderFullTree();
+                    }});
+                    tbody.appendChild(row);
+                }});
+            }}
+
+            // Render files
+            files.forEach(file => {{
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <div class="file-name">
+                            <span class="file-icon">${{file.icon}}</span>
+                            <span>${{escapeHtml(file.name)}}</span>
+                        </div>
+                    </td>
+                    <td><span class="file-extension">${{escapeHtml(file.extension)}}</span></td>
+                    <td>${{file.size_human}}</td>
+                    <td class="modified">${{file.modified}}</td>
+                    <td class="modified">${{file.created}}</td>
+                `;
+                tbody.appendChild(row);
+            }});
+        }}
+
+        // Up button handler
+        document.getElementById('upButton').addEventListener('click', () => {{
+            if (!currentPath) return;
+            const parts = currentPath.split('/');
+            parts.pop();
+            const parentPath = parts.join('/');
+            selectFolder(parentPath);
+        }});
+
+        // Splitter resize functionality
+        const splitter = document.getElementById('browseSplitter');
+        const sidebar = document.querySelector('.browse-sidebar');
+        let isResizing = false;
+
+        splitter.addEventListener('mousedown', (e) => {{
+            isResizing = true;
+            splitter.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }});
+
+        document.addEventListener('mousemove', (e) => {{
+            if (!isResizing) return;
+            const container = document.querySelector('.browse-container');
+            const containerRect = container.getBoundingClientRect();
+            const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+            if (newWidth >= 15 && newWidth <= 50) {{
+                document.documentElement.style.setProperty('--sidebar-width', newWidth + '%');
+                localStorage.setItem('browseSidebarWidth', newWidth);
+            }}
+        }});
+
+        document.addEventListener('mouseup', () => {{
+            if (isResizing) {{
+                isResizing = false;
+                splitter.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }}
+        }});
+
+        // Restore sidebar width from localStorage
+        const savedWidth = localStorage.getItem('browseSidebarWidth');
+        if (savedWidth) {{
+            document.documentElement.style.setProperty('--sidebar-width', savedWidth + '%');
+        }}
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {{
+            tab.addEventListener('click', () => {{
+                const tabName = tab.dataset.tab;
+
+                // Update active tab button
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Update active tab content
+                document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                document.getElementById(tabName + 'Tab').classList.add('active');
+
+                // Hide loading overlay when not on Files tab
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                if (tabName !== 'files' && loadingOverlay) {{
+                    loadingOverlay.classList.add('hidden');
+                }}
+
+                // Initialize browse mode if switching to it
+                if (tabName === 'browse' && !document.getElementById('folderTree').hasChildNodes()) {{
+                    browseController.init();
+                }}
+            }});
+        }});
     </script>
 </body>
 </html>"""
@@ -1654,6 +3105,10 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
     # Convert chunks to JSON
     data_chunks_json = json.dumps(data_chunks)
 
+    # Build directory tree for browse mode
+    directory_tree = build_directory_tree(files_data, root_path)
+    directory_tree_json = json.dumps(directory_tree)
+
     # Fill in template (cache Path object)
     total_file_count = len(files_data)
     html_content = html_template.format(
@@ -1676,7 +3131,9 @@ def generate_html(files_data, root_path, total_size, extension_stats, output_fil
         recent_created=''.join(recent_created_html),
         css_common=get_common_css(),
         css_inline_mode=get_common_css_inline_mode(),
-        js_common=get_common_javascript()
+        css_browse_mode=get_browse_mode_css(),
+        js_common=get_common_javascript(),
+        directory_tree_json=directory_tree_json
     )
 
     # Write to file
@@ -1705,6 +3162,7 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
     <style>
 {css_common}
 {css_db_mode}
+{css_browse_mode}
     </style>
 </head>
 <body>
@@ -1735,6 +3193,7 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
 
         <div class="tabs">
             <button class="tab active" data-tab="files">📋 All Files</button>
+            <button class="tab" data-tab="browse">🗂️ Browse</button>
             <button class="tab" data-tab="stats">📊 Statistics</button>
         </div>
 
@@ -1773,6 +3232,48 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
                     </table>
                     <div id="noResults" class="no-results" style="display: none;">
                         No files match your search criteria.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="browseTab" class="tab-content">
+            <div class="browse-container">
+                <div class="browse-sidebar">
+                    <div class="tree" id="folderTree"></div>
+                </div>
+                <div class="browse-splitter" id="browseSplitter"></div>
+                <div class="browse-main">
+                    <div class="browse-breadcrumb" id="browseBreadcrumb">
+                        <button class="up-button" id="upButton" disabled>↑ Up</button>
+                        <span class="breadcrumb-item active" data-path="">📁 {{root_name}}</span>
+                    </div>
+                    <div class="browse-controls">
+                        <input type="text" id="browseSearchBox" class="browse-search" placeholder="🔍 Search files...">
+                        <label class="search-scope">
+                            <input type="checkbox" id="searchAllFolders">
+                            Search all folders
+                        </label>
+                        <span class="file-count" id="browseFileCount"></span>
+                    </div>
+                    <div class="browse-file-list" id="browseFileList">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-column="name">Name</th>
+                                    <th data-column="extension">Type</th>
+                                    <th data-column="size">Size</th>
+                                    <th data-column="modified">Modified</th>
+                                    <th data-column="created">Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="browseTableBody">
+                            </tbody>
+                        </table>
+                        <div class="empty-state" id="browseEmptyState" style="display: none;">
+                            <div class="empty-state-icon">📂</div>
+                            <div>No files in this folder</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1843,6 +3344,929 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
 
         // Common utility functions
 {js_common}
+
+        // Browse Mode Classes
+        class BrowseState {{
+            constructor() {{
+                this.currentPath = '';
+                this.expandedFolders = new Set();
+                this.currentSort = {{ column: 'name', ascending: true, foldersFirst: true }};
+                this.searchQuery = '';
+                this.searchScope = 'local'; // 'local' or 'global'
+                this.listeners = [];
+            }}
+
+            // Observer pattern for state changes
+            onChange(listener) {{
+                this.listeners.push(listener);
+            }}
+
+            notify() {{
+                this.listeners.forEach(fn => fn(this));
+            }}
+
+            // State mutations with notifications
+            setPath(path) {{
+                this.currentPath = path;
+                this.notify();
+            }}
+
+            toggleFolder(path) {{
+                if (this.expandedFolders.has(path)) {{
+                    this.expandedFolders.delete(path);
+                }} else {{
+                    this.expandedFolders.add(path);
+                }}
+                this.notify();
+            }}
+
+            setSort(column, ascending, foldersFirst = true) {{
+                this.currentSort = {{ column, ascending, foldersFirst }};
+                localStorage.setItem('browseSort', JSON.stringify(this.currentSort));
+                this.notify();
+            }}
+
+            setSearch(query, scope) {{
+                this.searchQuery = query;
+                this.searchScope = scope;
+                this.notify();
+            }}
+
+            // Restore from localStorage
+            static restore() {{
+                const state = new BrowseState();
+                const savedSort = localStorage.getItem('browseSort');
+                if (savedSort) {{
+                    try {{
+                        state.currentSort = JSON.parse(savedSort);
+                    }} catch (e) {{
+                        console.warn('Failed to restore sort preferences:', e);
+                    }}
+                }}
+                const savedExpanded = localStorage.getItem('browseExpandedFolders');
+                if (savedExpanded) {{
+                    try {{
+                        const expanded = JSON.parse(savedExpanded);
+                        state.expandedFolders = new Set(expanded);
+                    }} catch (e) {{
+                        console.warn('Failed to restore expanded folders:', e);
+                    }}
+                }}
+                return state;
+            }}
+
+            // Save state to localStorage
+            save() {{
+                localStorage.setItem('browseExpandedFolders', JSON.stringify(Array.from(this.expandedFolders)));
+            }}
+        }}
+
+        // Data Access Layer
+        class DataService {{
+            constructor(mode, dataSource) {{
+                this.mode = mode; // 'inline' or 'database'
+                this.dataSource = dataSource; // directoryTree or db instance
+            }}
+
+            async getFolder(path) {{
+                if (this.mode === 'inline') {{
+                    return this._getFolderInline(path);
+                }} else {{
+                    return await this._getFolderFromDB(path);
+                }}
+            }}
+
+            async getFiles(path, options = {{}}) {{
+                const defaults = {{
+                    sort: {{ column: 'name', ascending: true, foldersFirst: true }},
+                    search: '',
+                    limit: 1000,
+                    offset: 0
+                }};
+                const opts = {{ ...defaults, ...options }};
+
+                if (this.mode === 'inline') {{
+                    return this._getFilesInline(path, opts);
+                }} else {{
+                    return await this._getFilesFromDB(path, opts);
+                }}
+            }}
+
+            async searchGlobal(query) {{
+                if (this.mode === 'inline') {{
+                    return this._searchInline(query);
+                }} else {{
+                    return await this._searchDB(query);
+                }}
+            }}
+
+            // ============ INLINE MODE IMPLEMENTATIONS ============
+
+            _getFolderInline(path) {{
+                let node = this.dataSource; // directoryTree root
+                if (path) {{
+                    const parts = path.split('/');
+                    for (const part of parts) {{
+                        node = node.children[part];
+                        if (!node) return null;
+                    }}
+                }}
+                return {{
+                    name: node.name,
+                    path: path,
+                    fileCount: node.file_count,
+                    totalSize: node.total_size,
+                    children: Object.keys(node.children || {{}}),
+                    files: node.files || []
+                }};
+            }}
+
+            _getFilesInline(path, opts) {{
+                const folder = this._getFolderInline(path);
+                if (!folder) return {{ items: [], total: 0 }};
+
+                let files = [...folder.files];
+
+                // Apply search filter to files
+                if (opts.search) {{
+                    const query = opts.search.toLowerCase();
+                    files = files.filter(f =>
+                        f.name.toLowerCase().includes(query) ||
+                        f.extension.toLowerCase().includes(query)
+                    );
+                }}
+
+                // Get child folders
+                let folders = folder.children.map(name => {{
+                    const childPath = path ? `${{path}}/${{name}}` : name;
+                    const childFolder = this._getFolderInline(childPath);
+                    return {{
+                        type: 'folder',
+                        name: name,
+                        fileCount: childFolder.fileCount,
+                        totalSize: childFolder.totalSize,
+                        path: childPath
+                    }};
+                }});
+
+                // Apply search filter to folders
+                if (opts.search) {{
+                    const query = opts.search.toLowerCase();
+                    folders = folders.filter(f => f.name.toLowerCase().includes(query));
+                }}
+
+                // Sort folders and files separately
+                folders = this._sortItems(folders, opts.sort);
+                files = this._sortItems(files, opts.sort);
+
+                // Combine with folders first (if foldersFirst is enabled)
+                const combined = opts.sort.foldersFirst ? [...folders, ...files] : [...folders, ...files].sort((a, b) =>
+                    compareWithFoldersFirst(a, b, opts.sort.column, opts.sort.ascending, false)
+                );
+
+                const total = combined.length;
+
+                // Apply pagination
+                const paginated = combined.slice(opts.offset, opts.offset + opts.limit);
+
+                return {{ items: paginated, total }};
+            }}
+
+            _searchInline(query) {{
+                const results = [];
+                const queryLower = query.toLowerCase();
+
+                const searchNode = (node, currentPath) => {{
+                    // Search files in current node
+                    (node.files || []).forEach(file => {{
+                        if (file.name.toLowerCase().includes(queryLower) ||
+                            file.extension.toLowerCase().includes(queryLower)) {{
+                            results.push({{
+                                ...file,
+                                path: currentPath,
+                                type: 'file'
+                            }});
+                        }}
+                    }});
+
+                    // Search folder names and recurse
+                    Object.entries(node.children || {{}}).forEach(([name, child]) => {{
+                        const childPath = currentPath ? `${{currentPath}}/${{name}}` : name;
+                        if (name.toLowerCase().includes(queryLower)) {{
+                            results.push({{
+                                type: 'folder',
+                                name: name,
+                                path: childPath,
+                                fileCount: child.file_count,
+                                totalSize: child.total_size
+                            }});
+                        }}
+                        searchNode(child, childPath);
+                    }});
+                }};
+
+                searchNode(this.dataSource, '');
+                return results.slice(0, 1000); // Limit to 1000 results
+            }}
+
+            _sortItems(items, sort) {{
+                return items.sort((a, b) =>
+                    compareWithFoldersFirst(a, b, sort.column, sort.ascending, false)
+                );
+            }}
+
+            // ============ DATABASE MODE IMPLEMENTATIONS ============
+
+            async _getFolderFromDB(path) {{
+                try {{
+                    const db = this.dataSource;
+
+                    // Get files in current folder
+                    const fileQuery = `
+                        SELECT COUNT(*) as count, SUM(size_bytes) as total_size
+                        FROM files
+                        WHERE directory = ?
+                    `;
+                    const fileResult = db.exec(fileQuery, [path]);
+                    const fileCount = fileResult[0] ? fileResult[0].values[0][0] : 0;
+                    const totalSize = fileResult[0] ? (fileResult[0].values[0][1] || 0) : 0;
+
+                    // Get child folders
+                    // Strategy: Find all directories that are immediate children of the current path
+                    let childFolders = [];
+
+                    if (path === '') {{
+                        // Root: Get all top-level folders (no slashes in directory)
+                        const childQuery = `
+                            SELECT DISTINCT directory as name,
+                                   COUNT(*) as file_count,
+                                   SUM(size_bytes) as total_size
+                            FROM files
+                            WHERE directory != ''
+                              AND directory NOT LIKE '%/%'
+                            GROUP BY directory
+                            ORDER BY directory
+                        `;
+                        const childResult = db.exec(childQuery);
+                        if (childResult[0]) {{
+                            childFolders = childResult[0].values.map(row => row[0]);
+                        }}
+                    }} else {{
+                        // Non-root: Get immediate child folders
+                        const childQuery = `
+                            SELECT DISTINCT
+                                SUBSTR(directory, LENGTH(?) + 2,
+                                       CASE
+                                           WHEN INSTR(SUBSTR(directory, LENGTH(?) + 2), '/') > 0
+                                           THEN INSTR(SUBSTR(directory, LENGTH(?) + 2), '/') - 1
+                                           ELSE LENGTH(SUBSTR(directory, LENGTH(?) + 2))
+                                       END
+                                ) as name
+                            FROM files
+                            WHERE directory LIKE ? || '/%'
+                            ORDER BY name
+                        `;
+                        const childResult = db.exec(childQuery, [path, path, path, path, path]);
+                        if (childResult[0]) {{
+                            childFolders = childResult[0].values
+                                .map(row => row[0])
+                                .filter(name => name && name !== '');
+                        }}
+                    }}
+
+                    // Get folder name from path
+                    const name = path === '' ? 'root' : path.split('/').pop();
+
+                    return {{
+                        name: name,
+                        path: path,
+                        fileCount: fileCount,
+                        totalSize: totalSize,
+                        children: childFolders,
+                        files: [] // Will be populated by getFiles()
+                    }};
+                }} catch (error) {{
+                    console.error('Error in _getFolderFromDB:', error);
+                    return {{ name: 'root', path: '', fileCount: 0, totalSize: 0, children: [], files: [] }};
+                }}
+            }}
+
+            async _getFilesFromDB(path, opts) {{
+                try {{
+                    const db = this.dataSource;
+                    let items = [];
+
+                    // Get files from database
+                    let fileQuery = `
+                        SELECT name, extension, directory, size_bytes, size_human, modified, created, icon
+                        FROM files
+                        WHERE directory = ?
+                    `;
+                    const params = [path];
+
+                    // Apply search filter if provided
+                    if (opts.search) {{
+                        fileQuery += ` AND (LOWER(name) LIKE ? OR LOWER(extension) LIKE ?)`;
+                        const searchPattern = '%' + opts.search.toLowerCase() + '%';
+                        params.push(searchPattern, searchPattern);
+                    }}
+
+                    const fileResult = db.exec(fileQuery, params);
+
+                    if (fileResult[0]) {{
+                        items = fileResult[0].values.map(row => ({{
+                            type: 'file',
+                            name: row[0],
+                            extension: row[1],
+                            directory: row[2],
+                            size_bytes: row[3],
+                            size_human: row[4],
+                            modified: row[5],
+                            created: row[6],
+                            icon: row[7]
+                        }}));
+                    }}
+
+                    // Get child folders and their metadata
+                    const folder = await this._getFolderFromDB(path);
+                    const childFolderItems = await Promise.all(
+                        folder.children.map(async childName => {{
+                            const childPath = path ? `${{path}}/${{childName}}` : childName;
+                            const childFolder = await this._getFolderFromDB(childPath);
+                            return {{
+                                type: 'folder',
+                                name: childName,
+                                path: childPath,
+                                fileCount: childFolder.fileCount,
+                                totalSize: childFolder.totalSize
+                            }};
+                        }})
+                    );
+
+                    // Apply search filter to folders if provided
+                    let folders = childFolderItems;
+                    if (opts.search) {{
+                        const query = opts.search.toLowerCase();
+                        folders = childFolderItems.filter(f => f.name.toLowerCase().includes(query));
+                    }}
+
+                    // Sort items using shared sorting function
+                    folders = this._sortItems(folders, opts.sort);
+                    items = this._sortItems(items, opts.sort);
+
+                    // Combine with folders first if enabled
+                    const combined = opts.sort.foldersFirst ? [...folders, ...items] : [...folders, ...items].sort((a, b) =>
+                        compareWithFoldersFirst(a, b, opts.sort.column, opts.sort.ascending, false)
+                    );
+
+                    const total = combined.length;
+
+                    // Apply pagination
+                    const paginated = combined.slice(opts.offset, opts.offset + opts.limit);
+
+                    return {{ items: paginated, total }};
+                }} catch (error) {{
+                    console.error('Error in _getFilesFromDB:', error);
+                    return {{ items: [], total: 0 }};
+                }}
+            }}
+
+            async _searchDB(query) {{
+                try {{
+                    const db = this.dataSource;
+                    const queryLower = query.toLowerCase();
+                    const searchPattern = '%' + queryLower + '%';
+
+                    // Search files
+                    const fileQuery = `
+                        SELECT name, extension, directory, size_bytes, size_human, modified, created, icon
+                        FROM files
+                        WHERE LOWER(name) LIKE ? OR LOWER(extension) LIKE ?
+                        ORDER BY directory, name
+                        LIMIT 1000
+                    `;
+                    const fileResult = db.exec(fileQuery, [searchPattern, searchPattern]);
+
+                    let results = [];
+
+                    if (fileResult[0]) {{
+                        results = fileResult[0].values.map(row => ({{
+                            type: 'file',
+                            name: row[0],
+                            extension: row[1],
+                            directory: row[2],
+                            size_bytes: row[3],
+                            size_human: row[4],
+                            modified: row[5],
+                            created: row[6],
+                            icon: row[7]
+                        }}));
+                    }}
+
+                    // Search folder names
+                    const folderQuery = `
+                        SELECT DISTINCT directory, COUNT(*) as file_count, SUM(size_bytes) as total_size
+                        FROM files
+                        WHERE LOWER(directory) LIKE ?
+                        GROUP BY directory
+                        ORDER BY directory
+                        LIMIT 200
+                    `;
+                    const folderResult = db.exec(folderQuery, [searchPattern]);
+
+                    if (folderResult[0]) {{
+                        const folderResults = folderResult[0].values.map(row => ({{
+                            type: 'folder',
+                            name: row[0].split('/').pop() || row[0],
+                            path: row[0],
+                            directory: row[0].split('/').slice(0, -1).join('/'),
+                            fileCount: row[1],
+                            totalSize: row[2]
+                        }}));
+                        results = [...results, ...folderResults];
+                    }}
+
+                    return results.slice(0, 1000); // Limit total results
+                }} catch (error) {{
+                    console.error('Error in _searchDB:', error);
+                    return [];
+                }}
+            }}
+        }}
+
+        // Browse Controller - UI Logic
+        class BrowseController {{
+            constructor(dataService, state) {{
+                this.dataService = dataService;
+                this.state = state;
+                this.searchDebounce = null;
+                this.currentFolder = null;
+
+                // Listen to state changes
+                state.onChange(() => this.handleStateChange());
+            }}
+
+            async init() {{
+                this.setupEventListeners();
+                await this.navigateToFolder('');
+            }}
+
+            handleStateChange() {{
+                // State changed, re-render if needed
+                // For now, renders are triggered explicitly
+            }}
+
+            async navigateToFolder(path) {{
+                this.state.setPath(path);
+                const folder = await this.dataService.getFolder(path);
+                this.currentFolder = folder;
+                await this.render();
+            }}
+
+            async navigateUp() {{
+                if (!this.state.currentPath) return;
+                const parts = this.state.currentPath.split('/');
+                parts.pop();
+                await this.navigateToFolder(parts.join('/'));
+            }}
+
+            async sort(column) {{
+                const current = this.state.currentSort;
+                const ascending = current.column === column ? !current.ascending : true;
+                this.state.setSort(column, ascending, true);
+                await this.renderFileList();
+            }}
+
+            async search(query, scope) {{
+                clearTimeout(this.searchDebounce);
+                this.searchDebounce = setTimeout(async () => {{
+                    this.state.setSearch(query, scope);
+                    if (scope === 'global' && query) {{
+                        await this.renderGlobalSearch(query);
+                    }} else {{
+                        await this.renderFileList();
+                    }}
+                }}, 300);
+            }}
+
+            async render() {{
+                await this.renderTree();
+                await this.renderBreadcrumb();
+                await this.renderFileList();
+            }}
+
+            async renderTree() {{
+                const treeContainer = document.getElementById('folderTree');
+                treeContainer.innerHTML = '';
+                await this._renderTreeNode(this.dataService.dataSource, treeContainer, '');
+            }}
+
+            async _renderTreeNode(node, parentElement, path) {{
+                const hasChildren = Object.keys(node.children || {{}}).length > 0;
+                const isExpanded = this.state.expandedFolders.has(path);
+
+                const treeItem = document.createElement('div');
+                treeItem.className = 'tree-item' + (isExpanded ? ' expanded' : '') + (this.state.currentPath === path ? ' selected' : '');
+                treeItem.dataset.path = path;
+
+                const content = document.createElement('div');
+                content.className = 'tree-item-content';
+
+                // Toggle icon
+                const toggle = document.createElement('div');
+                toggle.className = 'tree-toggle' + (hasChildren ? '' : ' empty');
+                toggle.textContent = hasChildren ? (isExpanded ? '▼' : '▶') : '';
+                content.appendChild(toggle);
+
+                // Folder icon
+                const icon = document.createElement('span');
+                icon.className = 'tree-icon';
+                icon.textContent = '📁';
+                content.appendChild(icon);
+
+                // Label
+                const label = document.createElement('span');
+                label.className = 'tree-label';
+                label.textContent = node.name;
+                label.title = node.name;
+                content.appendChild(label);
+
+                // File count badge
+                if (node.file_count > 0) {{
+                    const badge = document.createElement('span');
+                    badge.className = 'tree-badge';
+                    badge.textContent = node.file_count;
+                    content.appendChild(badge);
+                }}
+
+                // Folder size
+                const size = document.createElement('span');
+                size.className = 'tree-size';
+                size.textContent = formatSize(node.total_size);
+                content.appendChild(size);
+
+                treeItem.appendChild(content);
+
+                // Click handler
+                content.addEventListener('click', async (e) => {{
+                    e.stopPropagation();
+
+                    if (hasChildren && (e.target === toggle || e.target === icon)) {{
+                        this.state.toggleFolder(path);
+                        this.state.save();
+                        await this.renderTree();
+                    }} else {{
+                        await this.navigateToFolder(path);
+                    }}
+                }});
+
+                parentElement.appendChild(treeItem);
+
+                // Render children if expanded
+                if (hasChildren && isExpanded) {{
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'tree-children';
+                    treeItem.appendChild(childrenContainer);
+
+                    const sortedChildren = Object.entries(node.children).sort((a, b) =>
+                        a[1].name.localeCompare(b[1].name)
+                    );
+
+                    for (const [childName, childNode] of sortedChildren) {{
+                        const childPath = path ? `${{path}}/${{childName}}` : childName;
+                        await this._renderTreeNode(childNode, childrenContainer, childPath);
+                    }}
+                }}
+            }}
+
+            async renderBreadcrumb() {{
+                const breadcrumb = document.getElementById('browseBreadcrumb');
+                const upButton = document.getElementById('upButton');
+
+                breadcrumb.innerHTML = '';
+                breadcrumb.appendChild(upButton);
+
+                upButton.disabled = !this.state.currentPath;
+
+                const parts = this.state.currentPath ? this.state.currentPath.split('/') : [];
+
+                // Root
+                const rootItem = document.createElement('span');
+                rootItem.className = 'breadcrumb-item' + (this.state.currentPath === '' ? ' active' : '');
+                rootItem.textContent = `📁 ${{this.dataService.dataSource.name}}`;
+                rootItem.dataset.path = '';
+                if (this.state.currentPath !== '') {{
+                    rootItem.addEventListener('click', () => this.navigateToFolder(''));
+                }}
+                breadcrumb.appendChild(rootItem);
+
+                // Path parts
+                parts.forEach((part, index) => {{
+                    const separator = document.createElement('span');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '/';
+                    breadcrumb.appendChild(separator);
+
+                    const partPath = parts.slice(0, index + 1).join('/');
+                    const item = document.createElement('span');
+                    item.className = 'breadcrumb-item' + (partPath === this.state.currentPath ? ' active' : '');
+                    item.textContent = part;
+                    item.dataset.path = partPath;
+                    if (partPath !== this.state.currentPath) {{
+                        item.addEventListener('click', () => this.navigateToFolder(partPath));
+                    }}
+                    breadcrumb.appendChild(item);
+                }});
+            }}
+
+            async renderFileList() {{
+                const {{ items, total }} = await this.dataService.getFiles(
+                    this.state.currentPath,
+                    {{
+                        sort: this.state.currentSort,
+                        search: this.state.searchScope === 'local' ? this.state.searchQuery : '',
+                        limit: 1000,
+                        offset: 0
+                    }}
+                );
+
+                const tbody = document.getElementById('browseTableBody');
+                const emptyState = document.getElementById('browseEmptyState');
+
+                tbody.innerHTML = '';
+
+                if (items.length === 0) {{
+                    tbody.style.display = 'none';
+                    emptyState.style.display = 'flex';
+                    return;
+                }}
+
+                tbody.style.display = '';
+                emptyState.style.display = 'none';
+
+                items.forEach(item => {{
+                    const row = this._createFileRow(item);
+                    tbody.appendChild(row);
+                }});
+
+                // Update count
+                const browseFileCountEl = document.getElementById('browseFileCount');
+                if (browseFileCountEl) browseFileCountEl.textContent = `${{total}} items`;
+            }}
+
+            async renderGlobalSearch(query) {{
+                const results = await this.dataService.searchGlobal(query);
+
+                const tbody = document.getElementById('browseTableBody');
+                const emptyState = document.getElementById('browseEmptyState');
+
+                tbody.innerHTML = '';
+
+                if (results.length === 0) {{
+                    tbody.style.display = 'none';
+                    emptyState.style.display = 'flex';
+                    return;
+                }}
+
+                tbody.style.display = '';
+                emptyState.style.display = 'none';
+
+                // Group results by folder
+                const grouped = this._groupByFolder(results);
+
+                Object.entries(grouped).forEach(([folderPath, items]) => {{
+                    // Add folder header
+                    const header = document.createElement('tr');
+                    header.className = 'search-folder-header';
+                    header.innerHTML = `<td colspan="5" style="background: #f0f0f0; font-weight: 600; padding: 10px;">📁 ${{folderPath || 'Root'}}</td>`;
+                    tbody.appendChild(header);
+
+                    // Add files
+                    items.forEach(item => {{
+                        const row = this._createFileRow(item);
+                        tbody.appendChild(row);
+                    }});
+                }});
+
+                // Show result count
+                const browseFileCountEl = document.getElementById('browseFileCount');
+                if (browseFileCountEl) browseFileCountEl.textContent = `${{results.length}} results (limited to 1000)`;
+            }}
+
+            _createFileRow(item) {{
+                const row = document.createElement('tr');
+                if (item.type === 'folder') {{
+                    row.className = 'folder-row';
+                    row.innerHTML = `
+                        <td>
+                            <div class="file-name">
+                                <span class="file-icon">📁</span>
+                                <span>${{escapeHtml(item.name)}}</span>
+                            </div>
+                        </td>
+                        <td><span class="file-extension">folder</span></td>
+                        <td>${{formatSize(item.totalSize)}}</td>
+                        <td>${{item.fileCount}} files</td>
+                        <td>-</td>
+                    `;
+                    row.style.cursor = 'pointer';
+                    row.addEventListener('click', () => {{
+                        this.navigateToFolder(item.path);
+                        this.state.expandedFolders.add(this.state.currentPath);
+                        this.state.save();
+                        this.renderTree();
+                    }});
+                }} else {{
+                    row.innerHTML = `
+                        <td>
+                            <div class="file-name">
+                                <span class="file-icon">${{item.icon}}</span>
+                                <span>${{escapeHtml(item.name)}}</span>
+                            </div>
+                        </td>
+                        <td><span class="file-extension">${{escapeHtml(item.extension)}}</span></td>
+                        <td>${{item.size_human}}</td>
+                        <td class="modified">${{item.modified}}</td>
+                        <td class="modified">${{item.created}}</td>
+                    `;
+                }}
+                return row;
+            }}
+
+            _groupByFolder(items) {{
+                const grouped = {{}};
+                items.forEach(item => {{
+                    const folder = item.directory || item.path || '';
+                    if (!grouped[folder]) {{
+                        grouped[folder] = [];
+                    }}
+                    grouped[folder].push(item);
+                }});
+                return grouped;
+            }}
+
+            setupEventListeners() {{
+                // Search box
+                const searchBox = document.getElementById('browseSearchBox');
+                const searchAllCheckbox = document.getElementById('searchAllFolders');
+
+                if (searchBox) {{
+                    searchBox.addEventListener('input', (e) => {{
+                        const scope = (searchAllCheckbox && searchAllCheckbox.checked) ? 'global' : 'local';
+                        this.search(e.target.value, scope);
+                    }});
+                }}
+
+                if (searchAllCheckbox) {{
+                    searchAllCheckbox.addEventListener('change', (e) => {{
+                        const query = (searchBox && searchBox.value) || '';
+                        const scope = e.target.checked ? 'global' : 'local';
+                        this.search(query, scope);
+                    }});
+                }}
+
+                // Up button
+                const upButton = document.getElementById('upButton');
+                if (upButton) {{
+                    upButton.addEventListener('click', () => this.navigateUp());
+                }}
+
+                // Sort headers (will add sort indicators later)
+                document.querySelectorAll('#browseFileList th[data-column]').forEach(header => {{
+                    header.addEventListener('click', () => {{
+                        this.sort(header.dataset.column);
+                    }});
+                }});
+
+                // Splitter resize
+                this.setupSplitterResize();
+            }}
+
+            setupSplitterResize() {{
+                const splitter = document.getElementById('browseSplitter');
+                const sidebar = document.querySelector('.browse-sidebar');
+                let isResizing = false;
+
+                if (!splitter) return;
+
+                splitter.addEventListener('mousedown', (e) => {{
+                    isResizing = true;
+                    splitter.classList.add('resizing');
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                }});
+
+                document.addEventListener('mousemove', (e) => {{
+                    if (!isResizing) return;
+                    const container = document.querySelector('.browse-container');
+                    if (!container) return;
+
+                    const containerRect = container.getBoundingClientRect();
+                    const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+                    if (newWidth >= 15 && newWidth <= 50) {{
+                        document.documentElement.style.setProperty('--sidebar-width', newWidth + '%');
+                        localStorage.setItem('browseSidebarWidth', newWidth);
+                    }}
+                }});
+
+                document.addEventListener('mouseup', () => {{
+                    if (isResizing) {{
+                        isResizing = false;
+                        splitter.classList.remove('resizing');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                    }}
+                }});
+
+                // Restore sidebar width
+                const savedWidth = localStorage.getItem('browseSidebarWidth');
+                if (savedWidth) {{
+                    document.documentElement.style.setProperty('--sidebar-width', savedWidth + '%');
+                }}
+            }}
+        }}
+
+        // Initialize Browse Mode
+        async function initBrowseMode() {{
+            if (window.browseController) return; // Already initialized
+
+            try {{
+                console.log('Initializing Browse mode...');
+
+                const browseState = BrowseState.restore();
+                const dataService = new DataService('database', db);
+
+                const controller = new BrowseController(dataService, browseState);
+
+                // Override renderTree for database mode BEFORE calling init()
+                // In database mode, we need to build the tree structure dynamically from SQL queries
+                const originalRenderTree = controller.renderTree.bind(controller);
+                controller.renderTree = async function() {{
+                    const treeContainer = document.getElementById('folderTree');
+                    treeContainer.innerHTML = '';
+
+                    // Build root node from database
+                    const rootFolder = await this.dataService.getFolder('');
+                    const rootNode = {{
+                        name: '{root_name}',
+                        file_count: rootFolder.fileCount,
+                        total_size: rootFolder.totalSize,
+                        children: {{}}
+                    }};
+
+                    // Populate children
+                    for (const childName of rootFolder.children) {{
+                        rootNode.children[childName] = {{
+                            name: childName,
+                            file_count: 0,
+                            total_size: 0,
+                            children: {{}},
+                            _dbMode: true // Mark for lazy loading
+                        }};
+                    }}
+
+                    await this._renderTreeNode(rootNode, treeContainer, '');
+                }};
+
+                // Override _renderTreeNode to lazy-load children in database mode
+                const originalRenderTreeNode = controller._renderTreeNode.bind(controller);
+                controller._renderTreeNode = async function(node, parentElement, path) {{
+                    // If node needs lazy loading, load its metadata
+                    if (node._dbMode) {{
+                        const folder = await this.dataService.getFolder(path);
+                        node.file_count = folder.fileCount;
+                        node.total_size = folder.totalSize;
+
+                        // Only load children if expanded
+                        if (this.state.expandedFolders.has(path)) {{
+                            node.children = {{}};
+
+                            // Populate children
+                            for (const childName of folder.children) {{
+                                node.children[childName] = {{
+                                    name: childName,
+                                    file_count: 0,
+                                    total_size: 0,
+                                    children: {{}},
+                                    _dbMode: true
+                                }};
+                            }}
+                        }}
+
+                        node._dbMode = false; // Mark as loaded
+                    }}
+
+                    return await originalRenderTreeNode(node, parentElement, path);
+                }};
+
+                window.browseController = controller;
+                await controller.init();
+
+                console.log('Browse mode initialized successfully');
+            }} catch (error) {{
+                console.error('Failed to initialize Browse mode:', error);
+            }}
+        }}
 
         // Initialize sql.js and load database
         async function initDatabase() {{
@@ -1929,12 +4353,17 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
 
             // Tab switching
             document.querySelectorAll('.tab').forEach(tab => {{
-                tab.addEventListener('click', () => {{
+                tab.addEventListener('click', async () => {{
                     const tabName = tab.dataset.tab;
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     tab.classList.add('active');
                     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                     document.getElementById(tabName + 'Tab').classList.add('active');
+
+                    // Initialize Browse mode when tab is clicked
+                    if (tabName === 'browse' && !window.browseController) {{
+                        await initBrowseMode();
+                    }}
                 }});
             }});
 
@@ -1966,7 +4395,7 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
             }}
 
             const result = db.exec(query, params);
-            totalFilteredCount = result[0]?.values[0]?.[0] || 0;
+            totalFilteredCount = (result[0] && result[0].values[0] && result[0].values[0][0]) || 0;
             document.getElementById('resultNumber').textContent = totalFilteredCount.toLocaleString();
         }}
 
@@ -2065,7 +4494,7 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
             // Top extensions by count
             const countResult = db.exec('SELECT extension, count, total_size FROM extension_stats ORDER BY count DESC LIMIT 10');
             if (countResult.length > 0) {{
-                const maxCount = countResult[0].values[0]?.[1] || 1;
+                const maxCount = (countResult[0].values[0] && countResult[0].values[0][1]) || 1;
                 document.getElementById('topExtensionsByCount').innerHTML = countResult[0].values.map(row => {{
                     const [ext, count, size] = row;
                     return `
@@ -2086,7 +4515,7 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
             // Top extensions by size
             const sizeResult = db.exec('SELECT extension, count, total_size FROM extension_stats ORDER BY total_size DESC LIMIT 10');
             if (sizeResult.length > 0) {{
-                const maxSize = sizeResult[0].values[0]?.[2] || 1;
+                const maxSize = (sizeResult[0].values[0] && sizeResult[0].values[0][2]) || 1;
                 document.getElementById('topExtensionsBySize').innerHTML = sizeResult[0].values.map(row => {{
                     const [ext, count, size] = row;
                     return `
@@ -2194,6 +4623,7 @@ def generate_html_with_db(db_filename, root_path, total_size, extension_stats, o
         db_size_human=get_size_human_readable(db_size),
         css_common=get_common_css(),
         css_db_mode=get_common_css_db_mode(),
+        css_browse_mode=get_browse_mode_css(),
         js_common=get_common_javascript()
     )
 
