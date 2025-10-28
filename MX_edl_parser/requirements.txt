@@ -1,0 +1,13 @@
+# MX EDL Parser Requirements
+# Python 3.6+
+
+# Primary EDL parsing library (recommended)
+pycmx>=1.0.0
+
+# Optional: Excel export support
+pandas>=1.0.0
+openpyxl>=3.0.0
+
+# Note: If pycmx is not installed, the script will fall back to the built-in parser
+# Standard library dependencies (no installation needed):
+# - os, sys, re, csv, collections, argparse
