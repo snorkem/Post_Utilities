@@ -10,9 +10,6 @@ This application provides a user-friendly interface to:
 - Configure various options
 - View console output in real-time
 - Track operation progress
-
-Author: Claude
-Version: 1.0
 """
 
 import os
