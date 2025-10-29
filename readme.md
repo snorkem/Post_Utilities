@@ -1,7 +1,7 @@
 # Post Production Utilities
 
 A playground of Python tools I cobbled together using brains + a little claude.ai that'll make your post-production life way easier! 🎬✨
-Some of the scripts have GUI versions that you can use if you're less comfortable with terminal. All these were developed primarily for use on MacOS systems.
+Some of the scripts have GUI versions that you can use if you're less comfortable with terminal. All these were developed primarily for use on macOS systems in Python 3.7+.
 
 ## The Toolbox
 
@@ -52,13 +52,13 @@ The ultimate file name makeover artist. Quickly:
 ### 6. Directory Indexer
 **File:** `directory_indexer.py`
 
-Your visual directory explorer on steroids! Creates beautiful, interactive HTML archives:
-- Scans entire directory trees (handles up to 200K files smoothly)
-- Generates single-file HTML reports with zero dependencies
-- Live search, sort, and filter capabilities
-- Works offline - perfect for archiving project drives!
-
-**Performance Note:** Optimized for datasets up to ~200,000 files. For massive archives (1M+ files), consider indexing subdirectories separately.
+Your visual directory explorer and archival wizard! Creates interactive HTML archives with smart dual-mode architecture:
+- **JSON Mode** (< 200k files): Single self-contained HTML file
+- **Database Mode** (200k+ files): SQLite backend for massive datasets (1M+!)
+- Real-time search, sort, and filter with file type icons
+- Statistics dashboard showing top extensions, largest files, and recent changes
+- Auto-generates launcher scripts for macOS and Windows
+- Works completely offline - perfect for archiving project drives!
 
 ## Get Started
 
