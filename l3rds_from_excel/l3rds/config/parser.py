@@ -47,9 +47,9 @@ class ConfigParser:
             epilog=self._get_epilog(),
         )
 
-        # Required arguments
-        parser.add_argument("input_file", help="Path to CSV or Excel file")
-        parser.add_argument("output_dir", help="Directory to save generated images")
+        # Required arguments (unless using --generate-template)
+        parser.add_argument("input_file", nargs="?", help="Path to CSV or Excel file")
+        parser.add_argument("output_dir", nargs="?", help="Directory to save generated images")
 
         # Configuration file
         parser.add_argument(
@@ -238,6 +238,13 @@ class ConfigParser:
             default=None,
             help="Write log output to file",
         )
+        mode_group.add_argument(
+            "--generate-template",
+            type=str,
+            metavar="OUTPUT_FILE",
+            default=None,
+            help="Generate Excel template file and exit (e.g., template.xlsx)",
+        )
 
         return parser
 
@@ -263,6 +270,9 @@ Excel/CSV Format:
   Note: Colors in Excel/CSV override command-line options per row.
 
 Examples:
+  Generate Excel template (no input/output required):
+    python l3rds_from_excel.py --generate-template template.xlsx
+
   Basic usage:
     python l3rds_from_excel.py input.xlsx output/
 
@@ -315,6 +325,7 @@ Examples:
             "input_file": parsed.input_file,
             "output_dir": parsed.output_dir,
             "test_mode": parsed.test,
+            "generate_template": parsed.generate_template,
         }
 
         return config, extra_args

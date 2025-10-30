@@ -34,6 +34,7 @@ from l3rds.data.extractor import ExcelRowExtractor
 from l3rds.rendering.generator import LowerThirdGenerator
 from l3rds.io.image_saver import ImageSaver
 from l3rds.io.preview import PreviewManager
+from l3rds.io.template_generator import TemplateGenerator
 from l3rds.utils.logger import setup_logging, get_logger
 from l3rds.utils.exceptions import L3rdsException
 
@@ -54,6 +55,31 @@ def main() -> int:
         # Parse arguments
         parser = ConfigParser()
         config, extra_args = parser.parse_args()
+
+        # Handle template generation mode
+        if extra_args["generate_template"]:
+            output_file = extra_args["generate_template"]
+
+            # Ensure .xlsx extension
+            if not output_file.endswith('.xlsx'):
+                output_file += '.xlsx'
+
+            print(f"Generating Excel template: {output_file}")
+            TemplateGenerator.create_template(output_file)
+
+            print(f"\n✓ Template created successfully!")
+            print(f"\nThe template includes:")
+            print(f"  • Data sheet - Ready for your entries")
+            print(f"  • Examples sheet - 5 sample rows demonstrating features")
+            print(f"  • Instructions sheet - Comprehensive formatting guide")
+            print(f"\nLocation: {Path(output_file).absolute()}")
+            return 0
+
+        # Validate required arguments for normal mode
+        if not extra_args["input_file"] or not extra_args["output_dir"]:
+            print("\nError: input_file and output_dir are required (unless using --generate-template)", file=sys.stderr)
+            parser.parser.print_help()
+            return 1
 
         # Setup logging
         logger = get_logger(__name__)

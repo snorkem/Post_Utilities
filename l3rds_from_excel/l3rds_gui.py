@@ -24,6 +24,7 @@ from l3rds.data.extractor import ExcelRowExtractor
 from l3rds.rendering.generator import LowerThirdGenerator
 from l3rds.io.image_saver import ImageSaver
 from l3rds.io.preview import PreviewManager
+from l3rds.io.template_generator import TemplateGenerator
 from l3rds.utils.logger import setup_logging, get_logger
 from l3rds.utils.exceptions import L3rdsException
 
@@ -293,6 +294,15 @@ class LowerThirdsGUI(QMainWindow):
         output_layout.addWidget(self.output_dir)
         output_layout.addWidget(output_browse)
         file_layout.addRow("Output Directory:", output_layout)
+
+        # Template generation button
+        template_layout = QHBoxLayout()
+        template_button = QPushButton("Generate Excel Template")
+        template_button.setToolTip("Create a formatted Excel template with examples and instructions")
+        template_button.clicked.connect(self.generate_excel_template)
+        template_layout.addWidget(template_button)
+        template_layout.addStretch()  # Push button to left
+        file_layout.addRow("", template_layout)
 
         left_column.addWidget(file_group)
 
@@ -889,6 +899,51 @@ class LowerThirdsGUI(QMainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if directory:
             self.output_dir.setText(directory)
+
+    def generate_excel_template(self):
+        """Generate an Excel template with data, examples, and instructions sheets."""
+        try:
+            # Open save file dialog
+            file_name, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Excel Template",
+                "l3rds_template.xlsx",
+                "Excel Files (*.xlsx);;All Files (*)",
+            )
+
+            if not file_name:
+                # User cancelled
+                return
+
+            # Ensure .xlsx extension
+            if not file_name.endswith('.xlsx'):
+                file_name += '.xlsx'
+
+            # Generate template
+            TemplateGenerator.create_template(file_name)
+
+            # Show success message
+            QMessageBox.information(
+                self,
+                "Template Created",
+                f"Excel template created successfully!\n\nLocation: {file_name}\n\n"
+                f"The template includes:\n"
+                f"• Data sheet - Ready for your entries\n"
+                f"• Examples sheet - 5 sample rows\n"
+                f"• Instructions sheet - Comprehensive guide"
+            )
+
+            # Update status bar
+            self.statusBar().showMessage(f"Excel template generated: {file_name}", 5000)
+
+        except Exception as e:
+            # Show error message
+            QMessageBox.critical(
+                self,
+                "Template Generation Failed",
+                f"Failed to create Excel template:\n\n{str(e)}"
+            )
+            self.statusBar().showMessage(f"Template generation failed: {str(e)}", 5000)
 
     def on_format_changed(self, format_type: str):
         """Update available options based on selected output format.
