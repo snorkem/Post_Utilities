@@ -8,7 +8,6 @@ Now uses the refactored architecture directly instead of subprocess calls.
 
 import sys
 import logging
-from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
