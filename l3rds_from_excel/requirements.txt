@@ -1,6 +1,15 @@
-numpy==2.2.4
-pandas==2.2.3
-Pillow==11.1.0
-PyQt5==5.15.11
-PyQt5_sip==12.17.0
-tifffile==2025.3.30
+# Core dependencies for Lower Thirds Generator
+# Python 3.10+ required
+
+# Data processing and Excel/CSV handling
+numpy==2.2.4       # Array operations for image data (16-bit TIFF support)
+pandas==2.2.3      # Excel/CSV file loading and data manipulation
+openpyxl==3.1.5    # Excel file (.xlsx) reading/writing engine for pandas
+
+# Image processing
+Pillow==11.1.0     # Image creation, text rendering, and effects (PIL fork)
+tifffile==2025.3.30  # Advanced TIFF file handling (16-bit support)
+
+# GUI interface
+PyQt5==5.15.11     # GUI framework for l3rds_gui.py
+PyQt5_sip==12.17.0 # Required PyQt5 dependency

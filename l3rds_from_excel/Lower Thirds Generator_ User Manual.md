@@ -8,7 +8,7 @@ This guide will help you set up and use the Lower Thirds Generator, even if you 
 
 ## System Requirements
 
-- Python 3.6 or higher
+- **Python 3.10 or higher** (required for modern type hints and features)
 - Windows, macOS, or Linux operating system
 - For CLI version: Basic understanding of using command-line/terminal
 - An Excel (.xlsx) or CSV file with your text data
@@ -31,23 +31,28 @@ Open your command prompt (Windows) or terminal (macOS/Linux) and run the followi
 pip install -r requirements.txt
 ```
 
-Or install the dependencies individually:
+This will install all required dependencies:
+- **numpy** - Array operations for image data
+- **pandas** - Excel/CSV file loading and data manipulation
+- **Pillow** - Image creation, text rendering, and effects
+- **tifffile** - Advanced TIFF file handling (16-bit support)
+- **PyQt5** - GUI framework (for l3rds_gui.py)
+
+Alternatively, you can install the dependencies individually:
 
 ```
-pip install pillow pandas numpy PyQt5
-```
-
-If you want to create TIFF images with 16-bit depth, also install:
-
-```
-pip install tifffile
+pip install numpy pandas Pillow PyQt5 tifffile
 ```
 
 ### Step 3: Download the Lower Thirds Generator
 
-Download the following files from the source provided to you:
+Download the complete application folder from the source provided to you. The folder should contain:
 - `l3rds_gui.py` - The graphical user interface version
 - `l3rds_from_excel.py` - The command-line version
+- `l3rds/` folder - Supporting package with all the core functionality
+- `requirements.txt` - List of dependencies
+
+**Note**: Make sure to keep all files and folders together in the same directory. The application requires the `l3rds/` package folder to function properly.
 
 ## Preparing Your Data
 
@@ -151,6 +156,37 @@ Here are some commonly used options:
 --format png           Output format: png, jpg, or tiff (default: png)
 ```
 
+### New Features: Configuration Files and Logging
+
+**Configuration Files** (New in refactored version):
+
+You can save your settings to a JSON configuration file and reuse them:
+
+```
+--config settings.json     Load settings from a JSON configuration file
+```
+
+Example workflow:
+1. Run the generator once with all your preferred settings
+2. Export settings to a JSON file (see Advanced Usage section)
+3. Reuse the settings file for future generations: `python l3rds_from_excel.py input.xlsx output/ --config settings.json`
+
+**Enhanced Logging** (New in refactored version):
+
+Track the generation process with detailed logging:
+
+```
+--verbose              Enable detailed logging output
+--log-file gen.log     Save log messages to a file
+```
+
+Example with logging:
+```
+python l3rds_from_excel.py input.xlsx output/ --verbose --log-file generation.log
+```
+
+This creates a detailed log file that's useful for troubleshooting or tracking batch generations.
+
 ## Color Specification
 
 You can specify colors in several ways:
@@ -186,6 +222,11 @@ python l3rds_from_excel.py credits.xlsx output_images --bg-color black --text-co
 python l3rds_from_excel.py credits.xlsx output_images --text-shadow --shadow-color "black" --text-outline "2,white"
 ```
 
+### Use a configuration file with logging:
+```
+python l3rds_from_excel.py credits.xlsx output_images --config my_style.json --verbose --log-file batch.log
+```
+
 ## Troubleshooting
 
 ### Common Issues:
@@ -193,29 +234,36 @@ python l3rds_from_excel.py credits.xlsx output_images --text-shadow --shadow-col
 1. **"Python is not recognized as a command"**:
    - Solution: Make sure Python is installed and added to your PATH
 
-2. **"Module not found" errors**:
+2. **Python version errors** (e.g., syntax errors or type hint errors):
+   - Solution: Make sure you have Python 3.10 or higher installed
+   - Check your version: `python --version` or `python3 --version`
+   - If you have an older version, download Python 3.10+ from python.org
+
+3. **"Module not found" errors**:
    - Solution: Install missing modules using pip
      ```
      pip install [module_name]
      ```
 
-3. **Font not found**:
+4. **Font not found**:
    - Solution: Specify the full path to the font file or use a common system font
 
-4. **Issues with transparency**:
+5. **Issues with transparency**:
    - Solution: Make sure to use PNG or TIFF format (JPG doesn't support transparency)
 
-5. **Image quality issues**:
+6. **Image quality issues**:
    - Solution: Use TIFF format with 16-bit depth for highest quality
      ```
      python l3rds_from_excel.py input.xlsx output_folder --format tiff --bit-depth 16
      ```
 
-6. **GUI not starting**:
+7. **GUI not starting**:
    - Solution: Make sure PyQt5 is installed:
      ```
      pip install PyQt5
      ```
+
+**Enhanced Error Messages**: The refactored version provides improved error messages with detailed context, making troubleshooting easier. Error messages now include information about which row caused the issue, which column has problems, and suggested solutions.
 
 ## Advanced Usage
 
@@ -228,6 +276,51 @@ For more control over your lower thirds, explore these additional options in bot
 - Vertical spacing between main and secondary text
 - Text transformation (none, upper, lower, title)
 - Custom bar height for the lower third bar
+
+### Creating and Using Configuration Files
+
+The refactored version supports JSON configuration files for easy reuse of settings:
+
+**Creating a Configuration File**:
+
+You can create a JSON file with your preferred settings. Here's an example `my_settings.json`:
+
+```json
+{
+  "width": 1920,
+  "height": 1080,
+  "text": {
+    "main_color": "white",
+    "secondary_color": "lightgray",
+    "shadow_enabled": true,
+    "letter_spacing": 0
+  },
+  "bar": {
+    "color": "blue,128",
+    "height": 150,
+    "padding": 50
+  },
+  "output": {
+    "format": "png",
+    "transparent_bg": false,
+    "bg_color": "black"
+  }
+}
+```
+
+**Using a Configuration File**:
+
+```
+python l3rds_from_excel.py input.xlsx output/ --config my_settings.json
+```
+
+This loads all settings from the JSON file. You can still override individual settings by adding command-line arguments after the `--config` option.
+
+**Benefits**:
+- Save complex configurations for reuse
+- Share settings with team members
+- Maintain consistent styling across projects
+- Quickly switch between different style presets
 
 ## Getting Help (CLI Version)
 
