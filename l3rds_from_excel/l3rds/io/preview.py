@@ -62,9 +62,12 @@ class PreviewManager:
 
         if wait_for_user:
             input("\nPress Enter to continue...")
-
-        # Clean up temporary file
-        try:
-            os.unlink(temp_filename)
-        except Exception as e:
-            logger.debug(f"Could not delete temporary file: {e}")
+            # Clean up temporary file after user views it
+            try:
+                os.unlink(temp_filename)
+            except Exception as e:
+                logger.debug(f"Could not delete temporary file: {e}")
+        else:
+            # Don't delete immediately - let the system viewer open it first
+            # The OS will clean up /tmp files periodically
+            logger.debug(f"Temporary preview file: {temp_filename} (not immediately cleaned up)")

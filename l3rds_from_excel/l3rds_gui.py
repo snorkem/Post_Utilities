@@ -7,6 +7,8 @@ Now uses the refactored architecture directly instead of subprocess calls.
 """
 
 import sys
+import logging
+from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -14,7 +16,7 @@ from PyQt5.QtWidgets import (
     QCheckBox, QComboBox, QGroupBox, QTabWidget, QMessageBox,
     QProgressBar, QFormLayout, QTextEdit, QRadioButton, QColorDialog,
 )
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, QObject
 from PyQt5.QtGui import QColor
 
 from l3rds.config.models import DefaultConfig, TextConfig, ShadowConfig, OutlineConfig, BarConfig, OutputConfig
@@ -25,6 +27,45 @@ from l3rds.io.image_saver import ImageSaver
 from l3rds.io.preview import PreviewManager
 from l3rds.utils.logger import setup_logging, get_logger
 from l3rds.utils.exceptions import L3rdsException
+
+
+class QTextEditLogger(logging.Handler, QObject):
+    """Custom logging handler that emits log records to a Qt signal.
+
+    This handler captures Python logging output and sends it to the GUI's
+    log tab via Qt signals, enabling thread-safe logging display.
+    """
+
+    # Signal emits (message, level_name) tuples
+    log_signal = pyqtSignal(str, str)
+
+    # Color scheme for different log levels
+    LEVEL_COLORS = {
+        'DEBUG': '#808080',      # Gray
+        'INFO': '#000000',       # Black
+        'WARNING': '#FF8C00',    # Orange
+        'ERROR': '#DC143C',      # Crimson
+        'CRITICAL': '#8B0000',   # Dark Red
+    }
+
+    def __init__(self):
+        """Initialize the handler."""
+        logging.Handler.__init__(self)
+        QObject.__init__(self)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Emit a log record via Qt signal.
+
+        Args:
+            record: The log record to emit
+        """
+        try:
+            # Format the message
+            msg = self.format(record)
+            # Emit signal with message and level name
+            self.log_signal.emit(msg, record.levelname)
+        except Exception:
+            self.handleError(record)
 
 
 class GeneratorWorker(QThread):
@@ -136,6 +177,22 @@ class LowerThirdsGUI(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        # Set up GUI logging handler
+        self.log_handler = QTextEditLogger()
+        self.log_handler.log_signal.connect(self.append_colored_log)
+
+        # Configure handler with a format that includes timestamp
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        self.log_handler.setFormatter(formatter)
+
+        # Add handler to root logger to capture all logging output
+        root_logger = logging.getLogger()
+        root_logger.addHandler(self.log_handler)
+
+        # Set initial log level (will be updated when generation starts)
+        self.log_handler.setLevel(logging.INFO)
+
         self.init_ui()
 
     def init_ui(self):
@@ -166,9 +223,26 @@ class LowerThirdsGUI(QMainWindow):
         # Log Tab
         log_tab = QWidget()
         log_layout = QVBoxLayout(log_tab)
+
+        # Log display area
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        self.log_text.setAcceptRichText(True)  # Enable HTML formatting for color-coding
         log_layout.addWidget(self.log_text)
+
+        # Button layout for Clear and Copy
+        log_button_layout = QHBoxLayout()
+        log_button_layout.addStretch()  # Push buttons to the right
+
+        clear_log_button = QPushButton("Clear Log")
+        clear_log_button.clicked.connect(self.log_text.clear)
+        log_button_layout.addWidget(clear_log_button)
+
+        copy_log_button = QPushButton("Copy to Clipboard")
+        copy_log_button.clicked.connect(self.copy_log_to_clipboard)
+        log_button_layout.addWidget(copy_log_button)
+
+        log_layout.addLayout(log_button_layout)
         tabs.addTab(log_tab, "Log")
 
         # Action buttons
@@ -411,7 +485,7 @@ class LowerThirdsGUI(QMainWindow):
         self.bit_depth = QComboBox()
         self.bit_depth.addItems(["8", "16"])
         self.bit_depth.setCurrentIndex(1)
-        format_layout.addRow("TIFF Bit Depth:", self.bit_depth)
+        format_layout.addRow("Bit Depth:", self.bit_depth)
 
         self.transparent = QCheckBox("Use transparent background")
         format_layout.addRow("", self.transparent)
@@ -995,6 +1069,11 @@ class LowerThirdsGUI(QMainWindow):
         self.disable_buttons()
 
         config = self.get_config()
+
+        # Update log handler level based on config
+        log_level = getattr(logging, config.log_level, logging.INFO)
+        self.log_handler.setLevel(log_level)
+
         self.worker = GeneratorWorker(config, self.input_file.text(), self.output_dir.text(), test_mode=True)
         self.worker.progress.connect(self.on_progress)
         self.worker.error.connect(self.on_error)
@@ -1022,6 +1101,11 @@ class LowerThirdsGUI(QMainWindow):
         self.disable_buttons()
 
         config = self.get_config()
+
+        # Update log handler level based on config
+        log_level = getattr(logging, config.log_level, logging.INFO)
+        self.log_handler.setLevel(log_level)
+
         self.worker = GeneratorWorker(config, self.input_file.text(), self.output_dir.text(), test_mode=False)
         self.worker.progress.connect(self.on_progress)
         self.worker.error.connect(self.on_error)
@@ -1059,6 +1143,40 @@ class LowerThirdsGUI(QMainWindow):
     def on_error(self, message: str):
         """Handle error message."""
         self.log_text.append(f"ERROR: {message}")
+
+    def copy_log_to_clipboard(self):
+        """Copy log contents to clipboard."""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.log_text.toPlainText())
+        self.statusBar().showMessage("Log copied to clipboard", 2000)
+
+    def append_colored_log(self, message: str, level: str):
+        """Append a color-coded log message to the log tab.
+
+        Args:
+            message: The formatted log message (with timestamp and level)
+            level: The log level name (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        """
+        # Get color for this level
+        color = QTextEditLogger.LEVEL_COLORS.get(level, '#000000')
+
+        # Split message into timestamp+level and actual message
+        # Format is: "YYYY-MM-DD HH:MM:SS - LEVEL - message"
+        parts = message.split(' - ', 2)
+        if len(parts) == 3:
+            timestamp, level_name, msg_text = parts
+            # Format with timestamp and level in black, message in level color
+            html = f'<span style="color: black;">{timestamp} - {level_name} - </span><span style="color: {color};">{msg_text}</span>'
+        else:
+            # Fallback if format doesn't match expected pattern
+            html = f'<span style="color: {color};">{message}</span>'
+
+        self.log_text.append(html)
+
+        # Auto-scroll to bottom if already at bottom
+        scrollbar = self.log_text.verticalScrollBar()
+        if scrollbar.value() >= scrollbar.maximum() - 10:  # Within 10 pixels of bottom
+            scrollbar.setValue(scrollbar.maximum())
 
     def on_finished(self, success: bool, message: str):
         """Handle generation completion."""
