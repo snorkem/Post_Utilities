@@ -9,6 +9,12 @@ Now uses the refactored architecture directly instead of subprocess calls.
 import sys
 import logging
 
+# Check dependencies before importing them
+# This must happen before PyQt5 and other imports
+if __name__ == "__main__":
+    from l3rds.utils.dependency_checker import check_and_exit_if_missing
+    check_and_exit_if_missing(mode="GUI")
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QFileDialog, QSpinBox,
