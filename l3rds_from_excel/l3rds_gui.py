@@ -27,6 +27,8 @@ from PyQt5.QtGui import QColor
 from l3rds.config.models import DefaultConfig, TextConfig, ShadowConfig, OutlineConfig, BarConfig, OutputConfig
 from l3rds.data.loader import ExcelLoader
 from l3rds.data.extractor import ExcelRowExtractor
+from l3rds.data.subtitle_loader import SubtitleLoader
+from l3rds.data.subtitle_extractor import SubtitleRowExtractor
 from l3rds.rendering.generator import LowerThirdGenerator
 from l3rds.io.image_saver import ImageSaver
 from l3rds.io.preview import PreviewManager
@@ -81,12 +83,22 @@ class GeneratorWorker(QThread):
     finished = pyqtSignal(bool, str)  # (success, message)
     error = pyqtSignal(str)  # error message
 
-    def __init__(self, config: DefaultConfig, input_file: str, output_dir: str, test_mode: bool = False):
+    def __init__(
+        self,
+        config: DefaultConfig,
+        input_file: str,
+        output_dir: str,
+        test_mode: bool = False,
+        subtitle_file: str = None,
+        subtitle_filename_format: str = "timecode"
+    ):
         super().__init__()
         self.config = config
         self.input_file = input_file
         self.output_dir = output_dir
         self.test_mode = test_mode
+        self.subtitle_file = subtitle_file
+        self.subtitle_filename_format = subtitle_filename_format
 
     def run(self):
         """Run the generation process."""
@@ -125,6 +137,75 @@ class GeneratorWorker(QThread):
             logger.info(f"Bar Height: {self.config.bar.height}")
             logger.info(f"Bar Opacity: {self.config.bar.opacity}")
             logger.info("=" * 60)
+
+            # Check if subtitle mode
+            if self.subtitle_file:
+                # Subtitle workflow
+                logger.info("Mode: Subtitle File Processing")
+                logger.info(f"Subtitle File: {self.subtitle_file}")
+                logger.info(f"Filename Format: {self.subtitle_filename_format}")
+
+                # Load subtitle file
+                subtitle_loader = SubtitleLoader()
+                subtitles, fps = subtitle_loader.load(self.subtitle_file)
+
+                logger.info(f"Loaded {len(subtitles)} subtitles at {fps} fps")
+
+                # Create subtitle extractor
+                extractor = SubtitleRowExtractor(
+                    config=self.config,
+                    filename_format=self.subtitle_filename_format.lower()
+                )
+
+                # Create generator and saver
+                generator = LowerThirdGenerator(self.config)
+                saver = ImageSaver(self.config.output)
+
+                # Test mode - preview first subtitle only
+                if self.test_mode:
+                    logger.info("Test mode: Previewing first subtitle only")
+
+                    first_subtitle = subtitles[0]
+                    row_data = extractor.extract_from_subtitle(first_subtitle, index=0)
+
+                    # Generate preview
+                    image = generator.generate_preview(row_data)
+
+                    # Show preview
+                    self.progress.emit(1, "Preview generated")
+                    PreviewManager.show(image, wait_for_user=False)
+                    self.finished.emit(True, "Preview complete")
+                    return
+
+                # Normal mode - process all subtitles
+                count_success = 0
+                count_failed = 0
+
+                for index, subtitle in enumerate(subtitles):
+                    try:
+                        row_data = extractor.extract_from_subtitle(subtitle, index)
+                        image = generator.generate_from_row(row_data)
+
+                        filename = row_data.get_output_filename()
+                        output_path = saver.save(image, self.output_dir, filename)
+
+                        self.progress.emit(1, f"Generated: {output_path.name}")
+                        count_success += 1
+
+                    except Exception as e:
+                        self.error.emit(f"Subtitle {index + 1}: {str(e)}")
+                        count_failed += 1
+
+                message = f"Generated {count_success} subtitle images"
+                if count_failed > 0:
+                    message += f" ({count_failed} failed)"
+
+                self.finished.emit(count_failed == 0, message)
+                return
+
+            # Excel/CSV workflow
+            logger.info("Mode: Excel/CSV File Processing")
+            logger.info(f"Input File: {self.input_file}")
 
             # Load data
             loader = ExcelLoader()
@@ -285,14 +366,54 @@ class LowerThirdsGUI(QMainWindow):
         file_group = QGroupBox("File Selection")
         file_layout = QFormLayout(file_group)
 
-        input_layout = QHBoxLayout()
+        # Input type selection
+        input_type_layout = QHBoxLayout()
+        self.excel_radio = QRadioButton("Excel/CSV File")
+        self.excel_radio.setChecked(True)
+        self.excel_radio.toggled.connect(self.on_input_type_changed)
+        self.subtitle_radio = QRadioButton("Subtitle File (STL/SRT)")
+        self.subtitle_radio.toggled.connect(self.on_input_type_changed)
+        input_type_layout.addWidget(self.excel_radio)
+        input_type_layout.addWidget(self.subtitle_radio)
+        input_type_layout.addStretch()
+        file_layout.addRow("Input Type:", input_type_layout)
+
+        # Excel/CSV input (visible when Excel radio selected)
+        self.excel_input_layout = QHBoxLayout()
         self.input_file = QLineEdit()
         input_browse = QPushButton("Browse...")
         input_browse.clicked.connect(self.browse_input)
-        input_layout.addWidget(self.input_file)
-        input_layout.addWidget(input_browse)
-        file_layout.addRow("Input CSV/Excel:", input_layout)
+        self.excel_input_layout.addWidget(self.input_file)
+        self.excel_input_layout.addWidget(input_browse)
+        self.excel_input_row_label = QLabel("Input CSV/Excel:")
+        file_layout.addRow(self.excel_input_row_label, self.excel_input_layout)
 
+        # Subtitle input (hidden by default)
+        self.subtitle_input_layout = QHBoxLayout()
+        self.subtitle_file = QLineEdit()
+        subtitle_browse = QPushButton("Browse...")
+        subtitle_browse.clicked.connect(self.browse_subtitle)
+        self.subtitle_input_layout.addWidget(self.subtitle_file)
+        self.subtitle_input_layout.addWidget(subtitle_browse)
+        self.subtitle_input_row_label = QLabel("Subtitle File:")
+        file_layout.addRow(self.subtitle_input_row_label, self.subtitle_input_layout)
+
+        # Subtitle filename format (hidden by default)
+        self.subtitle_format_layout = QHBoxLayout()
+        self.subtitle_filename_format = QComboBox()
+        self.subtitle_filename_format.addItems(["Timecode", "Text", "Combined"])
+        self.subtitle_filename_format.setCurrentIndex(0)  # Default to timecode
+        self.subtitle_filename_format.setToolTip(
+            "Timecode: 0001_01-00-05-12_01-00-08-00\n"
+            "Text: 0001_Hello_World\n"
+            "Combined: 0001_01-00-05-12_Hello_World"
+        )
+        self.subtitle_format_layout.addWidget(self.subtitle_filename_format)
+        self.subtitle_format_layout.addStretch()
+        self.subtitle_format_row_label = QLabel("Filename Format:")
+        file_layout.addRow(self.subtitle_format_row_label, self.subtitle_format_layout)
+
+        # Output directory (always visible)
         output_layout = QHBoxLayout()
         self.output_dir = QLineEdit()
         output_browse = QPushButton("Browse...")
@@ -301,14 +422,18 @@ class LowerThirdsGUI(QMainWindow):
         output_layout.addWidget(output_browse)
         file_layout.addRow("Output Directory:", output_layout)
 
-        # Template generation button
-        template_layout = QHBoxLayout()
-        template_button = QPushButton("Generate Excel Template")
-        template_button.setToolTip("Create a formatted Excel template with examples and instructions")
-        template_button.clicked.connect(self.generate_excel_template)
-        template_layout.addWidget(template_button)
-        template_layout.addStretch()  # Push button to left
-        file_layout.addRow("", template_layout)
+        # Template generation button (only for Excel mode)
+        self.template_layout = QHBoxLayout()
+        self.template_button = QPushButton("Generate Excel Template")
+        self.template_button.setToolTip("Create a formatted Excel template with examples and instructions")
+        self.template_button.clicked.connect(self.generate_excel_template)
+        self.template_layout.addWidget(self.template_button)
+        self.template_layout.addStretch()  # Push button to left
+        self.template_row_label = QLabel("")
+        file_layout.addRow(self.template_row_label, self.template_layout)
+
+        # Initialize visibility
+        self.on_input_type_changed()
 
         left_column.addWidget(file_group)
 
@@ -906,6 +1031,48 @@ class LowerThirdsGUI(QMainWindow):
         if directory:
             self.output_dir.setText(directory)
 
+    def browse_subtitle(self):
+        """Browse for subtitle file."""
+        file_name, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Subtitle File",
+            "",
+            "Subtitle Files (*.stl *.srt);;STL Files (*.stl);;SRT Files (*.srt);;All Files (*)",
+        )
+        if file_name:
+            self.subtitle_file.setText(file_name)
+
+    def on_input_type_changed(self):
+        """Handle input type radio button change."""
+        is_excel = self.excel_radio.isChecked()
+
+        # Show/hide Excel/CSV controls
+        self.excel_input_row_label.setVisible(is_excel)
+        for i in range(self.excel_input_layout.count()):
+            widget = self.excel_input_layout.itemAt(i).widget()
+            if widget:
+                widget.setVisible(is_excel)
+
+        # Show/hide subtitle controls
+        self.subtitle_input_row_label.setVisible(not is_excel)
+        for i in range(self.subtitle_input_layout.count()):
+            widget = self.subtitle_input_layout.itemAt(i).widget()
+            if widget:
+                widget.setVisible(not is_excel)
+
+        self.subtitle_format_row_label.setVisible(not is_excel)
+        for i in range(self.subtitle_format_layout.count()):
+            widget = self.subtitle_format_layout.itemAt(i).widget()
+            if widget:
+                widget.setVisible(not is_excel)
+
+        # Show/hide template button (only for Excel)
+        self.template_row_label.setVisible(is_excel)
+        for i in range(self.template_layout.count()):
+            widget = self.template_layout.itemAt(i).widget()
+            if widget:
+                widget.setVisible(is_excel)
+
     def generate_excel_template(self):
         """Generate an Excel template with data, examples, and instructions sheets."""
         try:
@@ -1134,7 +1301,18 @@ class LowerThirdsGUI(QMainWindow):
         log_level = getattr(logging, config.log_level, logging.INFO)
         self.log_handler.setLevel(log_level)
 
-        self.worker = GeneratorWorker(config, self.input_file.text(), self.output_dir.text(), test_mode=True)
+        # Get subtitle parameters if in subtitle mode
+        subtitle_file = self.subtitle_file.text() if self.subtitle_radio.isChecked() else None
+        subtitle_format = self.subtitle_filename_format.currentText() if self.subtitle_radio.isChecked() else "timecode"
+
+        self.worker = GeneratorWorker(
+            config,
+            self.input_file.text(),
+            self.output_dir.text(),
+            test_mode=True,
+            subtitle_file=subtitle_file,
+            subtitle_filename_format=subtitle_format
+        )
         self.worker.progress.connect(self.on_progress)
         self.worker.error.connect(self.on_error)
         self.worker.finished.connect(self.on_finished)
@@ -1145,13 +1323,23 @@ class LowerThirdsGUI(QMainWindow):
         if not self.validate_inputs():
             return
 
-        try:
-            loader = ExcelLoader()
-            total_rows = loader.get_row_count(self.input_file.text())
+        # Check if subtitle mode
+        is_subtitle_mode = self.subtitle_radio.isChecked()
 
-            self.progress_bar.setMaximum(total_rows)
-            self.progress_bar.setValue(0)
-            self.progress_bar.setVisible(True)
+        try:
+            if is_subtitle_mode:
+                # For subtitle mode, we'll use indeterminate progress (can't know count until loaded)
+                self.progress_bar.setMaximum(0)  # Indeterminate mode
+                self.progress_bar.setValue(0)
+                self.progress_bar.setVisible(True)
+            else:
+                # For Excel/CSV, get row count for progress tracking
+                loader = ExcelLoader()
+                total_rows = loader.get_row_count(self.input_file.text())
+
+                self.progress_bar.setMaximum(total_rows)
+                self.progress_bar.setValue(0)
+                self.progress_bar.setVisible(True)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Cannot read input file: {e}")
             return
@@ -1166,7 +1354,18 @@ class LowerThirdsGUI(QMainWindow):
         log_level = getattr(logging, config.log_level, logging.INFO)
         self.log_handler.setLevel(log_level)
 
-        self.worker = GeneratorWorker(config, self.input_file.text(), self.output_dir.text(), test_mode=False)
+        # Get subtitle parameters if in subtitle mode
+        subtitle_file = self.subtitle_file.text() if is_subtitle_mode else None
+        subtitle_format = self.subtitle_filename_format.currentText() if is_subtitle_mode else "timecode"
+
+        self.worker = GeneratorWorker(
+            config,
+            self.input_file.text(),
+            self.output_dir.text(),
+            test_mode=False,
+            subtitle_file=subtitle_file,
+            subtitle_filename_format=subtitle_format
+        )
         self.worker.progress.connect(self.on_progress)
         self.worker.error.connect(self.on_error)
         self.worker.finished.connect(self.on_finished)
@@ -1174,10 +1373,21 @@ class LowerThirdsGUI(QMainWindow):
 
     def validate_inputs(self) -> bool:
         """Validate user inputs."""
-        if not self.input_file.text():
-            QMessageBox.warning(self, "Input Required", "Please select an input file")
-            return False
+        # Check if subtitle mode
+        is_subtitle_mode = self.subtitle_radio.isChecked()
 
+        if is_subtitle_mode:
+            # Subtitle mode validation
+            if not self.subtitle_file.text():
+                QMessageBox.warning(self, "Input Required", "Please select a subtitle file")
+                return False
+        else:
+            # Excel/CSV mode validation
+            if not self.input_file.text():
+                QMessageBox.warning(self, "Input Required", "Please select an input file")
+                return False
+
+        # Output directory required for both modes
         if not self.output_dir.text():
             QMessageBox.warning(self, "Input Required", "Please select an output directory")
             return False

@@ -210,6 +210,24 @@ class ConfigParser:
             help="Skip generation if output file already exists",
         )
 
+        # Subtitle input (alternative to Excel/CSV)
+        subtitle_group = parser.add_argument_group("Subtitle Input (alternative to Excel/CSV)")
+        subtitle_group.add_argument(
+            "--subtitle-file",
+            type=str,
+            default=None,
+            metavar="PATH",
+            help="Path to STL or SRT subtitle file (alternative to Excel/CSV input)",
+        )
+        subtitle_group.add_argument(
+            "--subtitle-filename-format",
+            type=str,
+            default="timecode",
+            choices=["timecode", "text", "combined"],
+            help="Subtitle image filename format: 'timecode' (0001_01-00-05-12_01-00-08-00), "
+                 "'text' (0001_Hello_World), or 'combined' (0001_01-00-05-12_Hello_World) (default: timecode)",
+        )
+
         # Modes and logging
         mode_group = parser.add_argument_group("Modes and Logging")
         mode_group.add_argument(
@@ -273,7 +291,17 @@ Examples:
   Generate Excel template (no input/output required):
     python l3rds_from_excel.py --generate-template template.xlsx
 
-  Basic usage:
+  Generate subtitle images from STL file:
+    python l3rds_from_excel.py --subtitle-file subtitles.stl output/
+
+  Generate subtitle images from SRT file:
+    python l3rds_from_excel.py --subtitle-file subtitles.srt output/
+
+  Subtitle images with text-based filenames:
+    python l3rds_from_excel.py --subtitle-file subtitles.stl output/ \\
+      --subtitle-filename-format text
+
+  Basic usage (Excel/CSV):
     python l3rds_from_excel.py input.xlsx output/
 
   Custom dimensions and colors:
@@ -326,6 +354,8 @@ Examples:
             "output_dir": parsed.output_dir,
             "test_mode": parsed.test,
             "generate_template": parsed.generate_template,
+            "subtitle_file": parsed.subtitle_file,
+            "subtitle_filename_format": parsed.subtitle_filename_format,
         }
 
         return config, extra_args

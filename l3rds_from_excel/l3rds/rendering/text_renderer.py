@@ -87,11 +87,12 @@ class TextRenderer:
         """Wrap text to fit within max width.
 
         This method breaks text into multiple lines to ensure each line
-        fits within the specified maximum width.
+        fits within the specified maximum width. It preserves explicit
+        newline characters (\n) in the text before applying word wrapping.
 
         Args:
             draw: ImageDraw object
-            text: Text to wrap
+            text: Text to wrap (may contain \n for explicit line breaks)
             font: Font to use
             max_width: Maximum width in pixels
             letter_spacing: Character spacing
@@ -104,39 +105,48 @@ class TextRenderer:
             >>> renderer = TextRenderer()
             >>> lines = renderer.wrap_text(draw, "Long text here", font, 200)
             ['Long text', 'here']
+            >>> lines = renderer.wrap_text(draw, "Line 1\nLine 2", font, 200)
+            ['Line 1', 'Line 2']
         """
         # Transform text first
         transformed_text = TextTransformer.transform(text, transform)
 
-        # Split into words
-        words = transformed_text.split()
-        if not words:
-            return [""]
+        # Split on explicit newlines first to preserve intentional line breaks
+        explicit_lines = transformed_text.split('\n')
 
-        lines = []
-        current_line = []
+        # Word-wrap each explicit line
+        all_lines = []
+        for line in explicit_lines:
+            # Split into words
+            words = line.split()
+            if not words:
+                # Empty line (e.g., from consecutive newlines)
+                all_lines.append("")
+                continue
 
-        for word in words:
-            # Try adding word to current line
-            test_line = ' '.join(current_line + [word])
-            width, _ = self.measure_text(draw, test_line, font, letter_spacing, "none")
+            current_line = []
 
-            if width <= max_width:
-                current_line.append(word)
-            else:
-                # Current line is full, start new line
-                if current_line:
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
+            for word in words:
+                # Try adding word to current line
+                test_line = ' '.join(current_line + [word])
+                width, _ = self.measure_text(draw, test_line, font, letter_spacing, "none")
+
+                if width <= max_width:
+                    current_line.append(word)
                 else:
-                    # Single word too long, force it anyway
-                    lines.append(word)
+                    # Current line is full, start new line
+                    if current_line:
+                        all_lines.append(' '.join(current_line))
+                        current_line = [word]
+                    else:
+                        # Single word too long, force it anyway
+                        all_lines.append(word)
 
-        # Add remaining words
-        if current_line:
-            lines.append(' '.join(current_line))
+            # Add remaining words from this explicit line
+            if current_line:
+                all_lines.append(' '.join(current_line))
 
-        return lines
+        return all_lines if all_lines else [""]
 
     def draw_text(
         self,
