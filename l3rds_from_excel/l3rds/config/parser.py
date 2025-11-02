@@ -57,6 +57,12 @@ class ConfigParser:
             type=str,
             help="Load settings from JSON configuration file",
         )
+        parser.add_argument(
+            "--save-config",
+            type=str,
+            metavar="PATH",
+            help="Save current CLI settings to JSON config file and exit",
+        )
 
         # Dimensions
         dims_group = parser.add_argument_group("Dimensions")
@@ -90,6 +96,31 @@ class ConfigParser:
             help="Lower third bar color with optional alpha (default: black,0)",
         )
 
+        # Font settings
+        font_group = parser.add_argument_group("Font Settings")
+        font_group.add_argument(
+            "--main-font",
+            default="Arial",
+            help="Main font name or path to font file (default: Arial)",
+        )
+        font_group.add_argument(
+            "--secondary-font",
+            default=None,
+            help="Secondary font name or path (default: same as main font)",
+        )
+        font_group.add_argument(
+            "--main-font-size",
+            type=int,
+            default=None,
+            help="Main font size in points (default: auto-calculate from height)",
+        )
+        font_group.add_argument(
+            "--secondary-font-size",
+            type=int,
+            default=None,
+            help="Secondary font size in points (default: auto-calculate from height)",
+        )
+
         # Text settings
         text_group = parser.add_argument_group("Text Settings")
         text_group.add_argument(
@@ -107,7 +138,7 @@ class ConfigParser:
         text_group.add_argument(
             "--text-transform",
             default="none",
-            choices=["none", "upper", "lower", "title"],
+            choices=["none", "upper", "lower", "title", "capitalize", "swapcase"],
             help="Text case transformation (default: none)",
         )
         text_group.add_argument(
@@ -132,6 +163,22 @@ class ConfigParser:
             type=int,
             default=0,
             help="Vertical text position offset in pixels (positive=down, negative=up)",
+        )
+        text_group.add_argument(
+            "--default-justification",
+            default="lower left",
+            choices=[
+                "lower left", "lower center", "lower right",
+                "upper left", "upper center", "upper right",
+                "center center"
+            ],
+            help="Default text position/justification (default: lower left)",
+        )
+        text_group.add_argument(
+            "--padding",
+            type=int,
+            default=None,
+            help="Padding from edges in pixels (default: auto-calculate from dimensions)",
         )
 
         # Effects
@@ -356,6 +403,7 @@ Examples:
             "generate_template": parsed.generate_template,
             "subtitle_file": parsed.subtitle_file,
             "subtitle_filename_format": parsed.subtitle_filename_format,
+            "save_config": parsed.save_config,
         }
 
         return config, extra_args
@@ -393,6 +441,17 @@ Examples:
         config.text.wrap_padding = args.wrap_padding
         config.text.position_offset_x = args.position_offset_x
         config.text.position_offset_y = args.position_offset_y
+
+        # Font configuration
+        config.text.main_font = args.main_font
+        config.text.secondary_font = args.secondary_font
+        config.text.main_font_size = args.main_font_size
+        config.text.secondary_font_size = args.secondary_font_size
+
+        # Position configuration
+        config.default_justification = args.default_justification
+        if args.padding is not None:
+            config.text.padding = args.padding
 
         # Shadow configuration
         config.text.shadow.enabled = args.text_shadow

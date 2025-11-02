@@ -760,10 +760,6 @@ class LowerThirdsGUI(QMainWindow):
         self.bar_height.setSpecialValueText("None")
         bar_layout.addRow("Bar Height:", self.bar_height)
 
-        self.bar_opacity = QSpinBox()
-        self.bar_opacity.setRange(0, 255)
-        self.bar_opacity.setValue(0)
-        bar_layout.addRow("Bar Opacity:", self.bar_opacity)
         right_column.addWidget(bar_group)
 
         # Miscellaneous Group
@@ -961,7 +957,6 @@ class LowerThirdsGUI(QMainWindow):
 
             # Bar settings
             self.bar_height.setValue(config.bar.height or 0)
-            self.bar_opacity.setValue(config.bar.opacity or 0)
 
             # Output settings
             self.format_combo.setCurrentText(config.output.format)
@@ -1255,9 +1250,6 @@ class LowerThirdsGUI(QMainWindow):
 
         # NEW: Bar height and opacity override from Advanced Settings (0 = auto/None)
         config.bar.height = self.bar_height.value() if self.bar_height.value() > 0 else None
-        # Advanced Settings bar_opacity can override Basic Settings if set
-        if self.bar_opacity.value() > 0:
-            config.bar.opacity = self.bar_opacity.value()
 
         # Output
         config.output = OutputConfig()

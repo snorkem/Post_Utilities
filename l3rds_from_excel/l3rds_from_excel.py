@@ -77,6 +77,23 @@ def main() -> int:
             print(f"\nLocation: {Path(output_file).absolute()}")
             return 0
 
+        # Handle save config mode
+        if extra_args["save_config"]:
+            save_path = extra_args["save_config"]
+
+            # Ensure .json extension
+            if not save_path.endswith('.json'):
+                save_path += '.json'
+
+            print(f"Saving configuration to: {save_path}")
+            config.to_json(save_path)
+
+            print(f"\n✓ Configuration saved successfully!")
+            print(f"\nYou can load this configuration with:")
+            print(f"  python l3rds_from_excel.py --config {save_path} input.xlsx output/")
+            print(f"\nLocation: {Path(save_path).absolute()}")
+            return 0
+
         # Handle subtitle file mode
         if extra_args.get("subtitle_file"):
             # Validate output directory is provided
