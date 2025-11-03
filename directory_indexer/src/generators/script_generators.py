@@ -31,10 +31,33 @@ Default port: {port}
 """
 import http.server
 import socketserver
+import socket
 import os
 import sys
 
+# Port configuration
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else {port}
+
+# If using default port, check availability and find next available port
+if len(sys.argv) <= 1:
+    def is_port_available(port):
+        """Check if a port is available for binding."""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', port))
+                return True
+        except OSError:
+            return False
+
+    original_port = PORT
+    while not is_port_available(PORT):
+        PORT += 1
+        if PORT > 65535:  # Max valid port number
+            print(f"Error: Could not find available port starting from {{original_port}}")
+            sys.exit(1)
+
+    if PORT != original_port:
+        print(f"Note: Default port {{original_port}} was in use, using port {{PORT}} instead")
 
 class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
     """HTTP request handler with CORS headers for local file access"""
@@ -60,6 +83,9 @@ if __name__ == "__main__":
 
     try:
         with socketserver.TCPServer(("", PORT), Handler) as httpd:
+            # Output port for launcher scripts to parse (flush immediately)
+            print(f"ACTUAL_PORT={{PORT}}", flush=True)
+            sys.stdout.flush()
             print("=" * 60)
             print("Directory Index Viewer Server")
             print("=" * 60)
@@ -67,6 +93,7 @@ if __name__ == "__main__":
             print(f"\\nOpen in browser: http://localhost:{{PORT}}/{html_filename}")
             print("\\nPress Ctrl+C to stop the server")
             print("=" * 60)
+            sys.stdout.flush()
             httpd.serve_forever()
     except KeyboardInterrupt:
         print("\\n\\nServer stopped.")
@@ -126,24 +153,50 @@ echo ""
 echo "Working directory: $(pwd)"
 echo ""
 
-# Start the Python server in background
-python3 serve.py {port} &
+# Start the Python server in background and capture output
+# Note: Not passing port argument to allow auto-port detection
+python3 serve.py > /tmp/serve_output_$$.log 2>&1 &
 SERVER_PID=$!
 
-echo "Server starting on http://localhost:{port}"
 echo "Server PID: $SERVER_PID"
 echo ""
 
-# Wait for server to initialize
-sleep 2
+# Wait for server to start and output port
+sleep 3
+
+# Extract the actual port from server output
+ACTUAL_PORT=$(grep -m 1 "^ACTUAL_PORT=" /tmp/serve_output_$$.log | cut -d= -f2)
+
+if [ -z "$ACTUAL_PORT" ]; then
+    echo "Warning: Could not detect server port, using default {port}"
+    ACTUAL_PORT={port}
+fi
+
+echo "Server started on http://localhost:$ACTUAL_PORT"
+echo ""
 
 # Open in default browser
 echo "Opening browser..."
-open "http://localhost:{port}/{html_filename}"
+open "http://localhost:$ACTUAL_PORT/{html_filename}"
 echo ""
 echo "Server is running. Close this window to stop the server."
 echo "============================================================"
 echo ""
+
+# Tail server output in background
+tail -f /tmp/serve_output_$$.log &
+TAIL_PID=$!
+
+# Cleanup function
+cleanup() {{
+    echo "\\nStopping server..."
+    kill $SERVER_PID 2>/dev/null
+    kill $TAIL_PID 2>/dev/null
+    rm -f /tmp/serve_output_$$.log
+}}
+
+# Set up trap for cleanup
+trap cleanup EXIT INT TERM
 
 # Wait for user to close terminal (keeps server running)
 wait $SERVER_PID
@@ -164,24 +217,49 @@ echo.
 echo Working directory: %CD%
 echo.
 
-REM Start the Python server
-echo Starting server on http://localhost:{port}
-start /b python serve.py {port}
+REM Set temporary log file
+set LOG_FILE=%TEMP%\\serve_output_%RANDOM%.log
 
-REM Wait for server to initialize
-timeout /t 2 /nobreak >nul
+REM Start the Python server in background and capture output
+REM Note: Not passing port argument to allow auto-port detection
+start /b cmd /c "python serve.py > %LOG_FILE% 2>&1"
+
+echo Server starting...
+echo.
+
+REM Wait for server to start and output port
+timeout /t 3 /nobreak >nul
+
+REM Extract the actual port from server output
+set ACTUAL_PORT=
+for /f "tokens=2 delims==" %%i in ('findstr /b "ACTUAL_PORT=" %LOG_FILE% 2^>nul') do set ACTUAL_PORT=%%i
+
+REM If port not found, use default
+if "%ACTUAL_PORT%"=="" (
+    echo Warning: Could not detect server port, using default {port}
+    set ACTUAL_PORT={port}
+)
+
+echo Server started on http://localhost:%ACTUAL_PORT%
+echo.
 
 REM Open in default browser
 echo Opening browser...
-start http://localhost:{port}/{html_filename}
+start http://localhost:%ACTUAL_PORT%/{html_filename}
 
 echo.
-echo Server is running. Press Ctrl+C or close this window to stop.
+echo Server is running. Press any key to stop the server.
 echo ============================================================
 echo.
 
 REM Keep window open and wait
-pause
+pause >nul
+
+REM Cleanup
+echo.
+echo Stopping server...
+taskkill /f /fi "WINDOWTITLE eq serve.py*" >nul 2>&1
+del /f /q %LOG_FILE% >nul 2>&1
 '''
 
     # Write macOS script

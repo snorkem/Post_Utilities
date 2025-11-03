@@ -486,53 +486,99 @@ async function buildTreeFromDatabase() {
             }
         }
 
-        // Query file counts and sizes for each directory
-        for (const dirPath of allDirs) {
-            const statsQuery = dirPath === ''
-                ? 'SELECT COUNT(*) as count, COALESCE(SUM(size_bytes), 0) as total_size FROM files WHERE directory = ? OR directory LIKE ?'
-                : 'SELECT COUNT(*) as count, COALESCE(SUM(size_bytes), 0) as total_size FROM files WHERE directory = ? OR directory LIKE ?';
+        // OPTIMIZATION: Use single aggregated query instead of N queries
+        // Get direct file counts and sizes for each directory (files directly in directory, not subdirs)
+        console.log('Loading directory stats...');
+        const directStatsQuery = 'SELECT directory, COUNT(*) as count, COALESCE(SUM(size_bytes), 0) as size FROM files GROUP BY directory';
+        const directStatsStmt = db.prepare(directStatsQuery);
 
-            const statsStmt = db.prepare(statsQuery);
-            const params = dirPath === '' ? ['', '%'] : [dirPath, `${dirPath}/%`];
-            statsStmt.bind(params);
-            statsStmt.step();
+        const directStats = {};
+        while (directStatsStmt.step()) {
+            const row = directStatsStmt.get();
+            const dir = row[0] || '';
+            directStats[dir] = {
+                count: row[1],
+                size: row[2]
+            };
+        }
+        directStatsStmt.free();
 
-            const stats = statsStmt.get();
+        // Calculate totals for each directory (including subdirectories)
+        // Process in reverse order (deepest first) to accumulate upwards
+        const sortedDirs = Array.from(allDirs).sort((a, b) => {
+            const depthA = a.split('/').filter(p => p).length;
+            const depthB = b.split('/').filter(p => p).length;
+            return depthB - depthA; // Deepest first
+        });
+
+        for (const dirPath of sortedDirs) {
             const node = nodeMap[dirPath];
-            if (node) {
-                node.file_count = stats[0] || 0;
-                node.total_size = stats[1] || 0;
-            }
-            statsStmt.free();
+            if (!node) continue;
 
-            // Get direct files in this directory
-            const filesQuery = dirPath === ''
-                ? 'SELECT name, extension, size_bytes, modified, created, icon FROM files WHERE directory = "" OR directory IS NULL'
-                : 'SELECT name, extension, size_bytes, modified, created, icon FROM files WHERE directory = ?';
+            // Start with direct files in this directory
+            const direct = directStats[dirPath] || { count: 0, size: 0 };
+            node.file_count = direct.count;
+            node.total_size = direct.size;
 
-            const filesStmt = db.prepare(filesQuery);
-            if (dirPath !== '') {
-                filesStmt.bind([dirPath]);
-            }
-
-            const files = [];
-            while (filesStmt.step()) {
-                const row = filesStmt.get();
-                files.push({
-                    name: row[0],
-                    extension: row[1],
-                    size: row[2],
-                    modified: row[3],
-                    created: row[4],
-                    icon: row[5]
-                });
-            }
-            filesStmt.free();
-
-            if (node) {
-                node.files = files;
+            // Add counts from all child directories
+            for (const childName in node.children) {
+                const child = node.children[childName];
+                node.file_count += child.file_count;
+                node.total_size += child.total_size;
             }
         }
+
+        // OPTIMIZATION: Fetch all files in single query and group by directory
+        console.log('Loading files...');
+        const allFilesQuery = 'SELECT directory, name, extension, size_bytes, modified, created, icon FROM files ORDER BY directory, name';
+        const allFilesStmt = db.prepare(allFilesQuery);
+
+        let currentDir = null;
+        let currentFiles = [];
+        let processedCount = 0;
+        const totalFiles = Object.values(directStats).reduce((sum, s) => sum + s.count, 0);
+
+        while (allFilesStmt.step()) {
+            const row = allFilesStmt.get();
+            const dir = row[0] || '';
+
+            // When we encounter a new directory, save the previous directory's files
+            if (dir !== currentDir && currentDir !== null) {
+                const node = nodeMap[currentDir];
+                if (node) {
+                    node.files = currentFiles;
+                }
+
+                // Yield to UI periodically (every 1000 files)
+                processedCount += currentFiles.length;
+                if (processedCount > 0 && processedCount % 1000 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    updateLoadingProgress(95, `Processing files... ${processedCount}/${totalFiles}`);
+                }
+
+                currentFiles = [];
+            }
+
+            currentDir = dir;
+            currentFiles.push({
+                name: row[1],
+                extension: row[2],
+                size: row[3],
+                modified: row[4],
+                created: row[5],
+                icon: row[6]
+            });
+        }
+
+        // Don't forget the last directory's files
+        if (currentDir !== null && currentFiles.length > 0) {
+            const node = nodeMap[currentDir];
+            if (node) {
+                node.files = currentFiles;
+            }
+        }
+
+        allFilesStmt.free();
 
         return tree;
     } catch (error) {
@@ -557,6 +603,16 @@ async function initBrowseMode() {
     try {
         console.log('Initializing Browse mode for database...');
 
+        // Show loading indicator
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingStats = document.getElementById('loadingStats');
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('hidden');
+            if (loadingStats) {
+                loadingStats.textContent = 'Building directory tree...';
+            }
+        }
+
         // Build directory tree from database
         const directoryTree = await buildTreeFromDatabase();
 
@@ -570,9 +626,21 @@ async function initBrowseMode() {
         window.browseController = browseController;
         await browseController.init();
 
+        // Hide loading indicator
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('hidden');
+        }
+
         console.log('Browse mode initialized successfully');
     } catch (error) {
         console.error('Failed to initialize Browse mode:', error);
+
+        // Hide loading indicator on error
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('hidden');
+        }
+
         alert('Failed to initialize Browse mode: ' + error.message);
     }
 }
