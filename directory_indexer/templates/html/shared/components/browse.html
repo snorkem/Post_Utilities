@@ -1,0 +1,39 @@
+<div class="browse-container">
+    <div class="browse-sidebar">
+        <div class="tree" id="folderTree"></div>
+    </div>
+    <div class="browse-splitter" id="browseSplitter"></div>
+    <div class="browse-main">
+        <div class="browse-breadcrumb" id="browseBreadcrumb">
+            <button class="up-button" id="upButton" disabled>↑ Up</button>
+            <span class="breadcrumb-item active" data-path="">📁 {root_name}</span>
+        </div>
+        <div class="browse-controls">
+            <input type="text" id="browseSearchBox" class="browse-search" placeholder="🔍 Search files...">
+            <label class="search-scope">
+                <input type="checkbox" id="searchAllFolders">
+                Search all folders
+            </label>
+            {browse_file_count}
+        </div>
+        <div class="browse-file-list" id="browseFileList">
+            <table>
+                <thead>
+                    <tr>
+                        <th data-column="name">Name</th>
+                        <th data-column="extension">Type</th>
+                        <th data-column="size">Size</th>
+                        <th data-column="modified">Modified</th>
+                        <th data-column="created">Created</th>
+                    </tr>
+                </thead>
+                <tbody id="browseTableBody">
+                </tbody>
+            </table>
+            <div class="empty-state" id="browseEmptyState" style="display: none;">
+                <div class="empty-state-icon">📂</div>
+                <div>No files in this folder</div>
+            </div>
+        </div>
+    </div>
+</div>

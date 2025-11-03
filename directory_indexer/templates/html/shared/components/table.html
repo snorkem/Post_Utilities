@@ -1,0 +1,23 @@
+<div class="table-container" id="tableContainer">
+    <div class="table-spacer" id="tableSpacer"></div>
+    <div class="table-viewport" id="tableViewport">
+        <table id="fileTable">
+            <thead>
+                <tr>
+                    <th data-column="name">File Name</th>
+                    <th data-column="extension">Type</th>
+                    <th data-column="{path_column_name}">Path</th>
+                    <th data-column="{size_column_name}">Size</th>
+                    <th data-column="modified">Modified</th>
+                    <th data-column="created">Created</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                {table_rows}
+            </tbody>
+        </table>
+        <div id="noResults" class="no-results" style="display: none;">
+            No files match your search criteria.
+        </div>
+    </div>
+</div>

@@ -1,0 +1,17 @@
+<div class="controls">
+    <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search files by name, path, or extension...">
+    <div class="filter-group">
+        <span class="filter-label">Extension:</span>
+        <select id="extensionFilter">
+            <option value="">All Types</option>
+            {extension_options}
+        </select>
+    </div>
+    {column_settings_button}
+</div>
+
+{column_settings_panel}
+
+<div class="result-count" id="resultCount">
+    Showing <strong id="resultNumber">{total_files}</strong> files
+</div>
