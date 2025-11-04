@@ -268,15 +268,15 @@ class TextRenderer:
             total_width = 0
             max_height = 0
 
-            for char in transformed_text:
+            for i, char in enumerate(transformed_text):
                 char_bbox = draw.textbbox((0, 0), char, font=font)
                 char_width = char_bbox[2] - char_bbox[0]
                 char_height = char_bbox[3] - char_bbox[1]
-                total_width += char_width + letter_spacing
+                total_width += char_width
+                # Add spacing between characters (not after the last one)
+                if i < len(transformed_text) - 1:
+                    total_width += letter_spacing
                 max_height = max(max_height, char_height)
-
-            # Remove the last letter_spacing
-            total_width -= letter_spacing
 
             return (total_width, max_height)
         else:

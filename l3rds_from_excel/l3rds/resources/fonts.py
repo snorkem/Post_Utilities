@@ -7,6 +7,7 @@ and loading them with proper fallback handling. It eliminates the
 
 import os
 import random
+import threading
 from pathlib import Path
 from typing import Final
 
@@ -32,6 +33,7 @@ class FontDiscovery:
 
     Attributes:
         _font_cache: Cached list of discovered fonts
+        _cache_lock: Thread lock for protecting cache access
 
     Example:
         >>> discovery = FontDiscovery()
@@ -41,6 +43,7 @@ class FontDiscovery:
     """
 
     _font_cache: list[Path] | None = None
+    _cache_lock: threading.Lock = threading.Lock()
 
     @classmethod
     def discover_fonts(cls) -> list[Path]:
@@ -48,6 +51,7 @@ class FontDiscovery:
 
         This method scans system font directories and returns a list of
         all font files. Results are cached for performance.
+        Thread-safe using double-checked locking pattern.
 
         Returns:
             List of paths to font files
@@ -57,35 +61,42 @@ class FontDiscovery:
             >>> any(f.name.lower().contains('arial') for f in fonts)
             True
         """
+        # First check without lock for performance (double-checked locking)
         if cls._font_cache is not None:
             return cls._font_cache
 
-        logger.info("Discovering system fonts...")
-        fonts: list[Path] = []
+        # Acquire lock for cache initialization
+        with cls._cache_lock:
+            # Check again in case another thread initialized while we waited
+            if cls._font_cache is not None:
+                return cls._font_cache
 
-        for font_dir_str in FONT_DIRECTORIES:
-            font_dir = Path(os.path.expanduser(font_dir_str))
+            logger.info("Discovering system fonts...")
+            fonts: list[Path] = []
 
-            if not font_dir.exists():
-                continue
+            for font_dir_str in FONT_DIRECTORIES:
+                font_dir = Path(os.path.expanduser(font_dir_str))
 
-            logger.debug(f"Scanning font directory: {font_dir}")
+                if not font_dir.exists():
+                    continue
 
-            try:
-                for root, dirs, files in os.walk(font_dir):
-                    for file in files:
-                        if file.lower().endswith(FONT_EXTENSIONS):
-                            font_path = Path(root) / file
-                            fonts.append(font_path)
-            except PermissionError:
-                logger.warning(f"Permission denied accessing font directory: {font_dir}")
-            except Exception as e:
-                logger.warning(f"Error scanning font directory {font_dir}: {e}")
+                logger.debug(f"Scanning font directory: {font_dir}")
 
-        cls._font_cache = fonts
-        logger.info(f"Discovered {len(fonts)} fonts on system")
+                try:
+                    for root, dirs, files in os.walk(font_dir):
+                        for file in files:
+                            if file.lower().endswith(FONT_EXTENSIONS):
+                                font_path = Path(root) / file
+                                fonts.append(font_path)
+                except PermissionError:
+                    logger.warning(f"Permission denied accessing font directory: {font_dir}")
+                except Exception as e:
+                    logger.warning(f"Error scanning font directory {font_dir}: {e}")
 
-        return fonts
+            cls._font_cache = fonts
+            logger.info(f"Discovered {len(fonts)} fonts on system")
+
+            return fonts
 
     @classmethod
     def find_font_by_name(cls, name: str) -> Path | None:

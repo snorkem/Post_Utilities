@@ -280,6 +280,18 @@ class LowerThirdBuilder:
             self.main_y += offset_y
             self.secondary_x += offset_x
             self.secondary_y += offset_y
+
+            # Bounds checking to prevent positions outside image dimensions
+            # Allow negative positions but warn about potential clipping
+            if self.main_x < 0 or self.main_x >= self.config.width:
+                logger.warning(f"Main text X position ({self.main_x}) outside image bounds [0, {self.config.width})")
+            if self.main_y < 0 or self.main_y >= self.config.height:
+                logger.warning(f"Main text Y position ({self.main_y}) outside image bounds [0, {self.config.height})")
+            if self.secondary_x < 0 or self.secondary_x >= self.config.width:
+                logger.warning(f"Secondary text X position ({self.secondary_x}) outside image bounds [0, {self.config.width})")
+            if self.secondary_y < 0 or self.secondary_y >= self.config.height:
+                logger.warning(f"Secondary text Y position ({self.secondary_y}) outside image bounds [0, {self.config.height})")
+
             logger.debug(f"Applied position offsets: x={offset_x}, y={offset_y}")
 
         logger.debug(f"Layout calculated: main=({self.main_x}, {self.main_y}), sec=({self.secondary_x}, {self.secondary_y})")

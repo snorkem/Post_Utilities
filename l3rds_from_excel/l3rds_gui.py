@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
     QCheckBox, QComboBox, QGroupBox, QTabWidget, QMessageBox,
     QProgressBar, QFormLayout, QTextEdit, QRadioButton, QColorDialog,
 )
-from PyQt5.QtCore import QThread, pyqtSignal, QObject
+from PyQt5.QtCore import QThread, pyqtSignal, QObject, Qt
 from PyQt5.QtGui import QColor
 
 from l3rds.config.models import DefaultConfig, TextConfig, ShadowConfig, OutlineConfig, BarConfig, OutputConfig
@@ -267,7 +267,8 @@ class LowerThirdsGUI(QMainWindow):
 
         # Set up GUI logging handler
         self.log_handler = QTextEditLogger()
-        self.log_handler.log_signal.connect(self.append_colored_log)
+        # Use QueuedConnection for thread-safe logging from worker threads
+        self.log_handler.log_signal.connect(self.append_colored_log, Qt.QueuedConnection)
 
         # Configure handler with a format that includes timestamp
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')

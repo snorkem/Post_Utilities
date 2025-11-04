@@ -39,8 +39,11 @@ class PreviewManager:
             >>> PreviewManager.show(image)
         """
         # Create temporary file
+        # Note: We get the filename but let the context manager close the handle
+        # before saving the image. This prevents file handle leaks on Windows.
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
             temp_filename = temp_file.name
+        # File handle is now properly closed
 
         # Save image to temporary file
         image.save(temp_filename)
@@ -48,14 +51,22 @@ class PreviewManager:
         logger.info(f"Preview image saved to: {temp_filename}")
         logger.info("Opening preview with system default viewer...")
 
+        # Validate temp filename to prevent command injection
+        if not os.path.isfile(temp_filename) or not temp_filename.endswith('.png'):
+            logger.error(f"Invalid temporary file: {temp_filename}")
+            return
+
         # Open with default viewer based on platform
         try:
             if sys.platform == "win32":
                 os.startfile(temp_filename)
             elif sys.platform == "darwin":  # macOS
-                subprocess.call(["open", temp_filename])
+                # Use subprocess.run with timeout for security and reliability
+                subprocess.run(["open", temp_filename], timeout=5, check=False)
             else:  # Linux and other Unix-like
-                subprocess.call(["xdg-open", temp_filename])
+                subprocess.run(["xdg-open", temp_filename], timeout=5, check=False)
+        except subprocess.TimeoutExpired:
+            logger.warning("Preview viewer timed out after 5 seconds")
         except Exception as e:
             logger.warning(f"Could not open preview automatically: {e}")
             logger.info(f"Please open {temp_filename} manually to view the preview.")
