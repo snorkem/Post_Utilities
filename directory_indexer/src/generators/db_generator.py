@@ -3,6 +3,7 @@ Database Mode Generator
 Generates HTML viewer with external SQLite database for directory indexer
 """
 
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
@@ -60,11 +61,14 @@ class DbGenerator:
 
         print("Loading HTML templates...")
 
-        # Load main template
-        main_html = self.html_builder.load_template('db_mode/main.html')
-
-        # Load all components
-        components = self.html_builder.load_all_components('db_mode')
+        # Load main template and components with error handling
+        try:
+            main_html = self.html_builder.load_template('db_mode/main.html')
+            components = self.html_builder.load_all_components('db_mode')
+        except FileNotFoundError as e:
+            print(f"Error: Required template file not found: {e}")
+            print("Please ensure all template files are present in the templates/ directory")
+            sys.exit(1)
 
         print("Generating JavaScript bundle...")
 
@@ -185,43 +189,3 @@ class DbGenerator:
         return f"""<script type="text/javascript">
 window.dbFilename = '{db_filename}';
 </script>"""
-
-    def generate_css(self) -> str:
-        """
-        Generate or load CSS styles for database mode.
-
-        Returns:
-            CSS string
-        """
-        # For now, CSS is embedded in the HTML templates
-        # This method is a placeholder for future CSS extraction
-        return ""
-
-
-# Convenience function for backward compatibility
-def generate_html_with_db(
-    db_filename: str,
-    root_path: str,
-    total_size: int,
-    extension_stats: Dict[str, Dict[str, Any]],
-    files_data: List[Dict[str, Any]],
-    output_file: str,
-    db_size: int = 0
-) -> None:
-    """
-    Generate HTML viewer file with external database.
-
-    This is a convenience function that creates a DbGenerator instance
-    and calls its generate() method.
-
-    Args:
-        db_filename: Name of the SQLite database file
-        root_path: Root directory path
-        total_size: Total size of all files in bytes
-        extension_stats: Extension statistics dictionary
-        files_data: List of file dictionaries (for statistics)
-        output_file: Path where HTML file will be written
-        db_size: Size of the database file in bytes (optional)
-    """
-    generator = DbGenerator()
-    generator.generate(db_filename, root_path, total_size, extension_stats, files_data, output_file, db_size)

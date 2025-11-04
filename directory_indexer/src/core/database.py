@@ -12,7 +12,6 @@ from typing import List, Dict, Any
 from pathlib import Path
 
 from ..config.settings import DatabaseConfig
-from ..models.file_info import FileInfo
 from ..utils.formatting import get_size_human_readable
 
 

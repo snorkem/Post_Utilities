@@ -4,6 +4,7 @@ Generates HTML with embedded JSON data for directory indexer
 """
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
@@ -62,11 +63,14 @@ class JsonGenerator:
 
         print("Loading HTML templates...")
 
-        # Load main template
-        main_html = self.html_builder.load_template('json_mode/main.html')
-
-        # Load all components
-        components = self.html_builder.load_all_components('json_mode')
+        # Load main template and components with error handling
+        try:
+            main_html = self.html_builder.load_template('json_mode/main.html')
+            components = self.html_builder.load_all_components('json_mode')
+        except FileNotFoundError as e:
+            print(f"Error: Required template file not found: {e}")
+            print("Please ensure all template files are present in the templates/ directory")
+            sys.exit(1)
 
         print("Generating JavaScript bundle...")
 
@@ -267,40 +271,3 @@ window.directoryTree = {context['directory_tree_json']};
         # Convert to JSON with minimal formatting for size
         return json.dumps(files_data, separators=(',', ':'))
 
-    def generate_css(self) -> str:
-        """
-        Generate or load CSS styles for JSON mode.
-
-        Returns:
-            CSS string
-        """
-        # For now, CSS is embedded in the HTML templates
-        # This method is a placeholder for future CSS extraction
-        return ""
-
-
-# Convenience function for backward compatibility
-def generate_html(
-    files_data: List[Dict[str, Any]],
-    root_path: str,
-    total_size: int,
-    extension_stats: Dict[str, Dict[str, Any]],
-    output_file: str,
-    directory_tree: Dict[str, Any] = None
-) -> None:
-    """
-    Generate HTML file with embedded JSON data.
-
-    This is a convenience function that creates a JsonGenerator instance
-    and calls its generate() method.
-
-    Args:
-        files_data: List of all file dictionaries
-        root_path: Root directory path
-        total_size: Total size of all files in bytes
-        extension_stats: Extension statistics dictionary
-        output_file: Path where HTML file will be written
-        directory_tree: Optional directory tree structure
-    """
-    generator = JsonGenerator()
-    generator.generate(files_data, root_path, total_size, extension_stats, output_file, directory_tree)

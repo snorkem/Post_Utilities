@@ -8,7 +8,6 @@ with names, full paths, sizes, and extensions.
 This is the refactored entry point that uses the modular architecture from src/.
 """
 
-import os
 import sys
 import argparse
 from pathlib import Path
@@ -19,54 +18,15 @@ from src.config.settings import DatabaseConfig
 from src.core.scanner import DirectoryScanner
 from src.core.database import DatabaseManager
 from src.core.tree_builder import DirectoryTreeBuilder
+from src.models import ScanResult
 from src.utils.formatting import get_size_human_readable
+from src.utils.path_resolver import OutputPathResolver
 from src.generators.json_generator import JsonGenerator
 from src.generators.db_generator import DbGenerator
 from src.generators.script_generators import (
     generate_server_script,
     generate_launcher_scripts
 )
-
-
-def determine_output_path(root_path: str, output_arg: str = None) -> str:
-    """
-    Determine the output file path based on arguments.
-
-    Args:
-        root_path: Root directory being scanned
-        output_arg: Optional output path argument
-
-    Returns:
-        Absolute path for the output HTML file
-    """
-    if output_arg:
-        # User specified output path
-        output_path = Path(output_arg)
-        if output_path.is_absolute():
-            # Check if it's an existing directory
-            if output_path.is_dir():
-                # Generate filename inside the directory
-                dir_name = Path(root_path).name or 'root'
-                base_name = f"index_{dir_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                output_file = str(output_path / f"{base_name}.html")
-            else:
-                # Use as filename (file or non-existent path)
-                output_file = str(output_path)
-        else:
-            # Relative path specified - create subfolder in target directory
-            base_name = output_path.stem  # filename without extension
-            output_dir = Path(root_path) / base_name
-            output_dir.mkdir(exist_ok=True)
-            output_file = str(output_dir / output_path.name)
-    else:
-        # Auto-generate filename and create subfolder
-        dir_name = Path(root_path).name or 'root'
-        base_name = f"index_{dir_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        output_dir = Path(root_path) / base_name
-        output_dir.mkdir(exist_ok=True)
-        output_file = str(output_dir / f"{base_name}.html")
-
-    return output_file
 
 
 def run_json_mode(scan_result, root_path: str, output_file: str, force_json: bool = False):
@@ -79,7 +39,7 @@ def run_json_mode(scan_result, root_path: str, output_file: str, force_json: boo
         output_file: Path where HTML file will be written
         force_json: Whether JSON mode was explicitly requested
     """
-    file_count = len(scan_result.files_data)
+    file_count = scan_result.file_count
 
     print("\n" + "=" * 60)
     print("JSON MODE")
@@ -92,7 +52,6 @@ def run_json_mode(scan_result, root_path: str, output_file: str, force_json: boo
     if file_count > DatabaseConfig.FILE_COUNT_THRESHOLD and force_json:
         print("\n" + "!" * 60)
         print("WARNING: Large dataset in JSON mode!")
-        print(f"  Files to archive: {file_count:,}")
         print("\n  The HTML file will be very large and browsers may")
         print("  struggle to load it due to memory constraints.")
         print("\n  Recommendation:")
@@ -140,7 +99,7 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
         output_file: Path where HTML file will be written
         forced: Whether database mode was explicitly requested
     """
-    file_count = len(scan_result.files_data)
+    file_count = scan_result.file_count
 
     print("\n" + "=" * 60)
     print("DATABASE MODE")
@@ -182,7 +141,7 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
     print(f"\nGenerating HTML viewer...")
     generator = DbGenerator()
     generator.generate(
-        os.path.basename(db_filename),
+        Path(db_filename).name,
         root_path,
         scan_result.total_size,
         scan_result.extension_stats,
@@ -209,7 +168,7 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
     print(f"  Output folder: {base_output_dir}")
     print(f"    data/")
     print(f"      {html_basename}")
-    print(f"      {os.path.basename(db_filename)} ({get_size_human_readable(db_size)})")
+    print(f"      {Path(db_filename).name} ({get_size_human_readable(db_size)})")
     print(f"      serve.py")
     print(f"    macOS/")
     print(f"      start.command")
@@ -284,7 +243,8 @@ Modes:
         sys.exit(1)
 
     # Determine output file
-    output_file = determine_output_path(root_path, args.output)
+    resolver = OutputPathResolver(root_path, args.output)
+    output_file = resolver.resolve()
 
     print("=" * 60)
     print("Directory Structure Archiver")
@@ -305,20 +265,17 @@ Modes:
         print("\nNo files found in the directory.")
         sys.exit(0)
 
-    file_count = len(files_data)
-
-    # Create a simple scan result object for compatibility
-    class SimpleScanResult:
-        def __init__(self, files, size, stats):
-            self.files_data = files
-            self.total_size = size
-            self.extension_stats = stats
-
-    scan_result = SimpleScanResult(files_data, total_size, extension_stats)
+    # Create ScanResult object
+    scan_result = ScanResult(
+        root_path=root_path,
+        files_data=files_data,
+        total_size=total_size,
+        extension_stats=extension_stats
+    )
 
     # Determine mode: database vs JSON
     use_database = args.extdb or (
-        file_count > DatabaseConfig.FILE_COUNT_THRESHOLD and not args.json
+        scan_result.file_count > DatabaseConfig.FILE_COUNT_THRESHOLD and not args.json
     )
 
     if use_database:

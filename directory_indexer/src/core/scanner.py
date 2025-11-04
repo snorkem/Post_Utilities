@@ -74,16 +74,21 @@ class DirectoryScanner:
         extension_stats_dict = dict(self.extension_stats)
 
         # Convert file data dictionaries to FileInfo objects
-        file_info_objects = [
-            FileInfo(
+        file_info_objects = []
+        for f in self.files_data:
+            try:
+                modified_ts = datetime.strptime(f['modified'], '%Y-%m-%d %H:%M:%S').timestamp()
+            except (ValueError, AttributeError, KeyError):
+                # If parsing fails, default to epoch (0.0)
+                modified_ts = 0.0
+
+            file_info_objects.append(FileInfo(
                 name=f['name'],
                 full_path=f['relative_path'],
                 size=f['size_bytes'],
                 extension=f['extension'],
-                modified=datetime.strptime(f['modified'], '%Y-%m-%d %H:%M:%S').timestamp()
-            )
-            for f in self.files_data
-        ]
+                modified=modified_ts
+            ))
 
         return ScanResult(
             root_path=str(self.root_path),

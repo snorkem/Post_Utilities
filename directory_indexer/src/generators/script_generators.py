@@ -153,19 +153,28 @@ echo ""
 echo "Working directory: $(pwd)"
 echo ""
 
+# Create temporary log file using mktemp for better cleanup
+LOG_FILE=$(mktemp /tmp/serve_output_XXXXXX.log)
+
 # Start the Python server in background and capture output
 # Note: Not passing port argument to allow auto-port detection
-python3 serve.py > /tmp/serve_output_$$.log 2>&1 &
+python3 serve.py > "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 
 echo "Server PID: $SERVER_PID"
+echo "Server starting..."
 echo ""
 
-# Wait for server to start and output port
-sleep 3
+# Wait for server to start and output port (polling with timeout)
+ACTUAL_PORT=""
+MAX_ATTEMPTS=20  # 20 attempts * 0.5s = 10 seconds max wait
+ATTEMPT=0
 
-# Extract the actual port from server output
-ACTUAL_PORT=$(grep -m 1 "^ACTUAL_PORT=" /tmp/serve_output_$$.log | cut -d= -f2)
+while [ -z "$ACTUAL_PORT" ] && [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    sleep 0.5
+    ACTUAL_PORT=$(grep -m 1 "^ACTUAL_PORT=" "$LOG_FILE" 2>/dev/null | cut -d= -f2)
+    ATTEMPT=$((ATTEMPT + 1))
+done
 
 if [ -z "$ACTUAL_PORT" ]; then
     echo "Warning: Could not detect server port, using default {port}"
@@ -184,7 +193,7 @@ echo "============================================================"
 echo ""
 
 # Tail server output in background
-tail -f /tmp/serve_output_$$.log &
+tail -f "$LOG_FILE" &
 TAIL_PID=$!
 
 # Cleanup function
@@ -192,7 +201,7 @@ cleanup() {{
     echo "\\nStopping server..."
     kill $SERVER_PID 2>/dev/null
     kill $TAIL_PID 2>/dev/null
-    rm -f /tmp/serve_output_$$.log
+    rm -f "$LOG_FILE"
 }}
 
 # Set up trap for cleanup
@@ -217,18 +226,25 @@ echo.
 echo Working directory: %CD%
 echo.
 
-REM Set temporary log file
+REM Set temporary files
 set LOG_FILE=%TEMP%\\serve_output_%RANDOM%.log
+set PID_FILE=%TEMP%\\serve_pid_%RANDOM%.txt
 
 REM Start the Python server in background and capture output
 REM Note: Not passing port argument to allow auto-port detection
 start /b cmd /c "python serve.py > %LOG_FILE% 2>&1"
 
+REM Capture the PID using WMIC (wait a moment for process to start)
+timeout /t 1 /nobreak >nul
+for /f "tokens=2 delims=," %%i in ('wmic process where "commandline like '%%python%%serve.py%%'" get processid /format:csv 2^>nul ^| findstr /r "[0-9]"') do (
+    echo %%i > %PID_FILE%
+)
+
 echo Server starting...
 echo.
 
 REM Wait for server to start and output port
-timeout /t 3 /nobreak >nul
+timeout /t 2 /nobreak >nul
 
 REM Extract the actual port from server output
 set ACTUAL_PORT=
@@ -258,7 +274,19 @@ pause >nul
 REM Cleanup
 echo.
 echo Stopping server...
-taskkill /f /fi "WINDOWTITLE eq serve.py*" >nul 2>&1
+
+REM Use stored PID if available, otherwise fall back to command line matching
+if exist %PID_FILE% (
+    set /p SERVER_PID=<%PID_FILE%
+    taskkill /f /pid %SERVER_PID% >nul 2>&1
+    del /f /q %PID_FILE% >nul 2>&1
+) else (
+    REM Fallback: find and kill by command line
+    for /f "tokens=2 delims=," %%i in ('wmic process where "commandline like '%%python%%serve.py%%'" get processid /format:csv 2^>nul ^| findstr /r "[0-9]"') do (
+        taskkill /f /pid %%i >nul 2>&1
+    )
+)
+
 del /f /q %LOG_FILE% >nul 2>&1
 '''
 

@@ -17,7 +17,7 @@ class UIConfig:
 
 class DatabaseConfig:
     """Database mode configuration."""
-    FILE_COUNT_THRESHOLD = 150_000  # Switch to DB mode above this count
+    FILE_COUNT_THRESHOLD = 200_000  # Switch to DB mode above this count
     PAGE_SIZE = 100  # Rows to fetch per database query
     BATCH_SIZE = 1000  # Database insert batch size
 
