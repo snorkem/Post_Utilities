@@ -12,7 +12,7 @@ from typing import List, Dict, Any
 from pathlib import Path
 
 from ..config.settings import DatabaseConfig
-from ..utils.formatting import get_size_human_readable
+from ..utils.formatting import SizeFormatter
 
 
 class DatabaseManager:
@@ -73,7 +73,7 @@ class DatabaseManager:
 
         db_size = os.path.getsize(self.db_path)
         print(f"✓ Database created: {self.db_path}")
-        print(f"  Database size: {get_size_human_readable(db_size)}")
+        print(f"  Database size: {SizeFormatter.format_size(db_size)}")
         return db_size
 
     def _create_schema(self, cursor: sqlite3.Cursor) -> None:

@@ -13,7 +13,7 @@ from .html_builder import HtmlBuilder
 from .component_builder import ComponentBuilder
 from .js_bundler import JavaScriptBundler
 from .statistics_builder import StatisticsBuilder
-from ..utils.formatting import get_size_human_readable
+from ..utils.formatting import SizeFormatter
 
 
 class JsonGenerator:
@@ -212,7 +212,7 @@ window.directoryTree = {context['directory_tree_json']};
             'root_path': root_path,
             'root_name': root_name,
             'total_files': f"{len(files_data):,}",
-            'total_size_human': get_size_human_readable(total_size),
+            'total_size_human': SizeFormatter.format_size(total_size),
             'total_extensions': str(len(extension_stats)),
             'generated_date': generated_date,
             'generated_datetime': generated_datetime,

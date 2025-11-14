@@ -19,7 +19,7 @@ from src.core.scanner import DirectoryScanner
 from src.core.database import DatabaseManager
 from src.core.tree_builder import DirectoryTreeBuilder
 from src.models import ScanResult
-from src.utils.formatting import get_size_human_readable
+from src.utils.formatting import SizeFormatter
 from src.utils.path_resolver import OutputPathResolver
 from src.generators.json_generator import JsonGenerator
 from src.generators.db_generator import DbGenerator
@@ -39,6 +39,8 @@ def run_json_mode(scan_result, root_path: str, output_file: str, force_json: boo
         output_file: Path where HTML file will be written
         force_json: Whether JSON mode was explicitly requested
     """
+    from src.models import FileInfo
+
     file_count = scan_result.file_count
 
     print("\n" + "=" * 60)
@@ -64,12 +66,15 @@ def run_json_mode(scan_result, root_path: str, output_file: str, force_json: boo
             print("Aborted.")
             sys.exit(0)
 
+    # Convert FileInfo objects to dicts for tree_builder
+    files_as_dicts = [f.to_dict() if isinstance(f, FileInfo) else f for f in scan_result.files_data]
+
     # Build directory tree for browse mode
     print(f"\nBuilding directory tree...")
     tree_builder = DirectoryTreeBuilder(Path(root_path))
-    directory_tree = tree_builder.build_tree(scan_result.files_data)
+    directory_tree = tree_builder.build_tree(files_as_dicts)
 
-    # Generate HTML with embedded JSON
+    # Generate HTML with embedded JSON (generator handles both FileInfo and dicts)
     print(f"Generating HTML archive...")
     generator = JsonGenerator()
     generator.generate(
@@ -84,7 +89,7 @@ def run_json_mode(scan_result, root_path: str, output_file: str, force_json: boo
     print(f"\n{'=' * 60}")
     print(f"Summary:")
     print(f"  Files archived: {file_count:,}")
-    print(f"  Total size: {get_size_human_readable(scan_result.total_size)}")
+    print(f"  Total size: {SizeFormatter.format_size(scan_result.total_size)}")
     print(f"  Output file: {output_file}")
     print(f"{'=' * 60}\n")
 
@@ -99,6 +104,8 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
         output_file: Path where HTML file will be written
         forced: Whether database mode was explicitly requested
     """
+    from src.models import FileInfo
+
     file_count = scan_result.file_count
 
     print("\n" + "=" * 60)
@@ -128,10 +135,13 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
     html_file = data_dir / html_basename
     db_filename = str(data_dir / (output_path_obj.stem + '.db'))
 
+    # Convert FileInfo objects to dicts for database_manager
+    files_as_dicts = [f.to_dict() if isinstance(f, FileInfo) else f for f in scan_result.files_data]
+
     # Create database using DatabaseManager
     db_manager = DatabaseManager(db_filename)
     db_size = db_manager.create_database(
-        scan_result.files_data,
+        files_as_dicts,
         scan_result.total_size,
         scan_result.extension_stats,
         Path(root_path)
@@ -145,7 +155,7 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
         root_path,
         scan_result.total_size,
         scan_result.extension_stats,
-        scan_result.files_data,
+        files_as_dicts,
         str(html_file),
         db_size
     )
@@ -164,11 +174,11 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
     print(f"\n{'=' * 60}")
     print(f"Summary:")
     print(f"  Files archived: {file_count:,}")
-    print(f"  Total size: {get_size_human_readable(scan_result.total_size)}")
+    print(f"  Total size: {SizeFormatter.format_size(scan_result.total_size)}")
     print(f"  Output folder: {base_output_dir}")
     print(f"    data/")
     print(f"      {html_basename}")
-    print(f"      {Path(db_filename).name} ({get_size_human_readable(db_size)})")
+    print(f"      {Path(db_filename).name} ({SizeFormatter.format_size(db_size)})")
     print(f"      serve.py")
     print(f"    macOS/")
     print(f"      start.command")
@@ -253,25 +263,16 @@ Modes:
     print("=" * 60)
 
     # Scan directory using refactored DirectoryScanner
-    # Use scan_legacy() to get data in the old dictionary format for compatibility
     scanner = DirectoryScanner(root_path)
     try:
-        files_data, total_size, extension_stats = scanner.scan_legacy()
+        scan_result = scanner.scan()
     except (FileNotFoundError, NotADirectoryError) as e:
         print(f"Error: {e}")
         sys.exit(1)
 
-    if len(files_data) == 0:
+    if scan_result.file_count == 0:
         print("\nNo files found in the directory.")
         sys.exit(0)
-
-    # Create ScanResult object
-    scan_result = ScanResult(
-        root_path=root_path,
-        files_data=files_data,
-        total_size=total_size,
-        extension_stats=extension_stats
-    )
 
     # Determine mode: database vs JSON
     use_database = args.extdb or (

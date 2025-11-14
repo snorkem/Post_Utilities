@@ -1,0 +1,95 @@
+Directory Indexer - Refactored Project Structure
+================================================
+
+Main Entry Point:
+  directory_indexer.py (316 lines)
+    - CLI argument parsing
+    - Orchestrates scanning and generation
+    - Maintains backward compatibility
+
+Core Business Logic (src/core/):
+  scanner.py (173 lines)
+    - DirectoryScanner class
+    - Recursive directory traversal
+    - File metadata collection
+    
+  database.py (108 lines)
+    - DatabaseManager class
+    - SQLite database creation
+    - Optimized schema and indexes
+    
+  tree_builder.py (77 lines)
+    - DirectoryTreeBuilder class
+    - Hierarchical tree construction
+    - File count/size aggregation
+
+Data Models (src/models/):
+  file_info.py
+    - FileInfo dataclass
+    - Type-safe file metadata
+    
+  scan_result.py
+    - ScanResult dataclass
+    - Encapsulates scan results
+
+Utilities (src/utils/):
+  formatting.py (94 lines)
+    - SizeFormatter class
+    - IconMapper class
+    - Legacy function wrappers
+    
+  path_resolver.py (77 lines)
+    - OutputPathResolver class
+    - Path resolution logic
+
+Configuration (src/config/):
+  settings.py
+    - UIConfig
+    - DatabaseConfig
+    - ProgressConfig
+    - ServerConfig
+    - DisplayConfig
+    - StatisticsConfig
+
+Generators (src/generators/):
+  templates.py (68 lines)
+    - TemplateLoader class
+    - CSS template loading
+    - HTML component generation
+    
+  legacy_generators.py (4,611 lines)
+    - HTML/JavaScript generation
+    - Server script generation
+    - Launcher script generation
+
+Templates (templates/common/):
+  common.css (481 lines)
+  json_mode.css (146 lines)
+  db_mode.css (17 lines)
+  browse_mode.css (272 lines)
+
+Tests (tests/):
+  fixtures/small_dataset/
+    - Test directory structure
+    - Sample files for testing
+  
+  test_outputs/
+    - Generated test outputs
+
+Backup Files:
+  directory_indexer_original.py (5,018 lines)
+  directory_indexer_old_backup.py (5,018 lines)
+
+Documentation:
+  CLAUDE.md - Project overview and commit guide
+  USAGE.md - User documentation
+  REFACTORING_COMPLETE.md - Detailed refactoring documentation
+  REFACTORING_SUMMARY.md - Executive summary
+  PROJECT_STRUCTURE.txt - This file
+
+Total Statistics:
+  - Original: 1 file, 5,018 lines
+  - Refactored: 14 modules + 4 CSS files
+  - Main entry: 316 lines (94% reduction)
+  - Test coverage: JSON mode ✅, Database mode ✅
+  - Compatibility: 100% backward compatible

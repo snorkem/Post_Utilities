@@ -78,14 +78,3 @@ class IconMapper:
             Emoji icon for the file type
         """
         return IconMapper._ICON_MAP.get(extension.lower(), '📎')
-
-
-# Legacy function names for backward compatibility
-def get_size_human_readable(size_bytes):
-    """Convert bytes to human readable format (legacy function)."""
-    return SizeFormatter.format_size(size_bytes)
-
-
-def get_file_icon(extension):
-    """Return emoji icon for file type (legacy function)."""
-    return IconMapper.get_icon(extension)

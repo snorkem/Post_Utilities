@@ -7,7 +7,7 @@ from file data and statistics.
 
 from typing import Dict, List, Any
 from html import escape as html_escape
-from ..utils.formatting import get_size_human_readable, get_file_icon
+from ..utils.formatting import SizeFormatter, IconMapper
 
 
 class ComponentBuilder:
@@ -74,7 +74,7 @@ class ComponentBuilder:
             html_items.append(f"""
                         <li class="stat-list-item">
                             <div class="stat-list-label">
-                                <span>{get_file_icon(ext)}</span>
+                                <span>{IconMapper.get_icon(ext)}</span>
                                 <span>{html_escape(ext)}</span>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: flex-end; min-width: 80px;">
@@ -119,11 +119,11 @@ class ComponentBuilder:
             html_items.append(f"""
                         <li class="stat-list-item">
                             <div class="stat-list-label">
-                                <span>{get_file_icon(ext)}</span>
+                                <span>{IconMapper.get_icon(ext)}</span>
                                 <span>{html_escape(ext)}</span>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: flex-end; min-width: 100px;">
-                                <span class="stat-list-value">{get_size_human_readable(stats['size'])}</span>
+                                <span class="stat-list-value">{SizeFormatter.format_size(stats['size'])}</span>
                                 <div class="progress-bar" style="width: 80px;">
                                     <div class="progress-fill" style="width: {percentage}%"></div>
                                 </div>

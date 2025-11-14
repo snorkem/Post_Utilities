@@ -5,6 +5,7 @@ Generates statistics HTML components for the directory indexer
 
 from typing import Dict, List, Any
 from .component_builder import ComponentBuilder
+from ..config.settings import StatisticsConfig
 
 
 class StatisticsBuilder:
@@ -42,18 +43,18 @@ class StatisticsBuilder:
         """
         return {
             'top_extensions_by_count': self.component_builder.build_top_extensions_by_count(
-                extension_stats, limit=10
+                extension_stats, limit=StatisticsConfig.TOP_EXTENSIONS_COUNT
             ),
             'top_extensions_by_size': self.component_builder.build_top_extensions_by_size(
-                extension_stats, limit=10
+                extension_stats, limit=StatisticsConfig.TOP_EXTENSIONS_COUNT
             ),
             'largest_files': self.component_builder.build_largest_files(
-                files_data, limit=50
+                files_data, limit=StatisticsConfig.LARGEST_FILES_COUNT
             ),
             'recent_files': self.component_builder.build_recent_files(
-                files_data, limit=50
+                files_data, limit=StatisticsConfig.RECENT_FILES_COUNT
             ),
             'recent_created': self.component_builder.build_recent_created_files(
-                files_data, limit=50
+                files_data, limit=StatisticsConfig.RECENT_FILES_COUNT
             )
         }

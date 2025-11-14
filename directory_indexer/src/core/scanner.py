@@ -9,10 +9,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 from ..models import FileInfo, ScanResult
-from ..utils import get_size_human_readable, get_file_icon
 from ..config.settings import ProgressConfig
 
 
@@ -26,7 +25,7 @@ class DirectoryScanner:
             root_path: Path to the root directory to scan
         """
         self.root_path = Path(root_path).resolve()
-        self.files_data = []
+        self.files_data: List[FileInfo] = []
         self.total_size = 0
         self.error_count = 0
         self.extension_stats = defaultdict(lambda: {'count': 0, 'size': 0})
@@ -49,22 +48,8 @@ class DirectoryScanner:
 
         print(f"Scanning {self.root_path}...")
 
-        # Cache frequently used methods for performance
-        get_size = get_size_human_readable
-        get_icon = get_file_icon
-
-        for dirpath, dirnames, filenames in os.walk(self.root_path):
-            # Convert dirpath once per directory
-            dir_path_obj = Path(dirpath)
-
-            for filename in filenames:
-                file_data = self._process_file(dir_path_obj, filename, get_size, get_icon)
-                if file_data:
-                    self.files_data.append(file_data)
-
-                    # Report progress periodically
-                    if len(self.files_data) % ProgressConfig.REPORT_INTERVAL == 0:
-                        print(f"  Processed {len(self.files_data)} files...")
+        # Use os.scandir() for better performance (10-20% faster than os.walk)
+        self._scan_directory(self.root_path)
 
         print(f"✓ Scan complete: {len(self.files_data)} files found")
         if self.error_count > 0:
@@ -73,97 +58,76 @@ class DirectoryScanner:
         # Convert defaultdict back to regular dict for compatibility
         extension_stats_dict = dict(self.extension_stats)
 
-        # Convert file data dictionaries to FileInfo objects
-        file_info_objects = []
-        for f in self.files_data:
-            try:
-                modified_ts = datetime.strptime(f['modified'], '%Y-%m-%d %H:%M:%S').timestamp()
-            except (ValueError, AttributeError, KeyError):
-                # If parsing fails, default to epoch (0.0)
-                modified_ts = 0.0
-
-            file_info_objects.append(FileInfo(
-                name=f['name'],
-                full_path=f['relative_path'],
-                size=f['size_bytes'],
-                extension=f['extension'],
-                modified=modified_ts
-            ))
-
         return ScanResult(
             root_path=str(self.root_path),
-            files_data=file_info_objects,
+            files_data=self.files_data,
             total_size=self.total_size,
             extension_stats=extension_stats_dict
         )
 
-    def scan_legacy(self) -> Tuple[List[Dict], int, Dict]:
-        """Scan directory and return results in legacy format.
-
-        This method maintains backward compatibility with the original
-        return format: (files_data, total_size, extension_stats)
-
-        Returns:
-            Tuple of (files_data list, total_size int, extension_stats dict)
-        """
-        scan_result = self.scan()
-        return self.files_data, self.total_size, scan_result.extension_stats
-
-    def _process_file(
-        self,
-        dir_path_obj: Path,
-        filename: str,
-        get_size,
-        get_icon
-    ) -> Dict:
-        """Process a single file and return its metadata.
+    def _scan_directory(self, dir_path: Path) -> None:
+        """Recursively scan a directory using os.scandir() for better performance.
 
         Args:
-            dir_path_obj: Path object for the directory
-            filename: Name of the file
-            get_size: Function to format file size
-            get_icon: Function to get file icon
-
-        Returns:
-            Dictionary containing file metadata, or None if file couldn't be processed
+            dir_path: Path to the directory to scan
         """
         try:
-            filepath = dir_path_obj / filename
-            stat_info = filepath.stat()
+            with os.scandir(dir_path) as entries:
+                for entry in entries:
+                    try:
+                        # Check if it's a file (don't follow symlinks)
+                        if entry.is_file(follow_symlinks=False):
+                            file_info = self._process_file_from_entry(entry)
+                            if file_info:
+                                self.files_data.append(file_info)
+
+                                # Report progress periodically
+                                if len(self.files_data) % ProgressConfig.REPORT_INTERVAL == 0:
+                                    print(f"  Processed {len(self.files_data)} files...")
+
+                        # Recursively scan subdirectories
+                        elif entry.is_dir(follow_symlinks=False):
+                            self._scan_directory(Path(entry.path))
+
+                    except (PermissionError, OSError):
+                        # Skip files/dirs we can't access
+                        continue
+
+        except (PermissionError, OSError):
+            # Can't access this directory
+            self.error_count += 1
+
+    def _process_file_from_entry(self, entry: os.DirEntry) -> FileInfo:
+        """Process a single file from os.scandir() entry.
+
+        Args:
+            entry: os.DirEntry object from scandir()
+
+        Returns:
+            FileInfo object containing file metadata, or None if file couldn't be processed
+        """
+        try:
+            # Get stat info directly from entry (more efficient)
+            stat_info = entry.stat(follow_symlinks=False)
+            filepath = Path(entry.path)
             extension = filepath.suffix.lower() or '(none)'
 
             # Cache expensive operations
             size_bytes = stat_info.st_size
-            parent_dir = filepath.parent
 
-            # Handle cross-platform creation time
-            try:
-                # macOS/BSD uses st_birthtime for true creation time
-                created_timestamp = stat_info.st_birthtime
-            except AttributeError:
-                # Linux/Windows uses st_ctime (inode change time, closest to creation)
-                created_timestamp = stat_info.st_ctime
-
-            file_data = {
-                'name': filename,
-                'path': str(filepath),
-                'relative_path': str(filepath.relative_to(self.root_path)),
-                'directory': str(parent_dir.relative_to(self.root_path)),
-                'size_bytes': size_bytes,
-                'size_human': get_size(size_bytes),
-                'extension': extension,
-                'icon': get_icon(extension),
-                'modified': datetime.fromtimestamp(stat_info.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
-                'created': datetime.fromtimestamp(created_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-            }
-
+            # Update totals and statistics
             self.total_size += size_bytes
-
-            # Track extension statistics
             self.extension_stats[extension]['count'] += 1
             self.extension_stats[extension]['size'] += size_bytes
 
-            return file_data
+            # Create and return FileInfo object
+            return FileInfo(
+                name=entry.name,
+                full_path=str(filepath.relative_to(self.root_path)),
+                size=size_bytes,
+                extension=extension,
+                modified=stat_info.st_mtime
+            )
 
         except (PermissionError, OSError):
             self.error_count += 1

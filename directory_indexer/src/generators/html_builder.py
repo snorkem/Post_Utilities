@@ -249,7 +249,3 @@ class HtmlBuilder:
 
         # Combine CSS
         return f"{common_css}\n\n{mode_css}\n\n{browse_css}"
-
-    def clear_cache(self):
-        """Clear the template cache."""
-        self._template_cache.clear()
