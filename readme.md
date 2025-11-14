@@ -1,7 +1,7 @@
 # Post Production Utilities
 
 A playground of Python tools I cobbled together using brains + a little claude.ai that'll make your post-production life way easier! 🎬✨
-Some of the scripts have GUI versions that you can use if you're less comfortable with terminal. All these were developed primarily for use on macOS systems in Python 3.7+.
+Some of the scripts have GUI versions that you can use if you're less comfortable with terminal. All these were developed primarily for use on macOS systems in Python 3.10+.
 
 ## The Toolbox
 
