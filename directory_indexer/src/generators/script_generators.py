@@ -122,20 +122,22 @@ if __name__ == "__main__":
 def generate_launcher_scripts(
     macos_dir: str,
     windows_dir: str,
+    linux_dir: str,
     html_filename: str,
     port: int = ServerConfig.DEFAULT_PORT
 ) -> tuple:
     """
-    Generate cross-platform launcher scripts for macOS and Windows.
+    Generate cross-platform launcher scripts for macOS, Windows, and Linux.
 
     Args:
         macos_dir: Directory where macOS .command script will be created
         windows_dir: Directory where Windows .bat script will be created
+        linux_dir: Directory where Linux .sh script will be created
         html_filename: Name of the HTML file to open
         port: Port number for the server (default from ServerConfig)
 
     Returns:
-        Tuple of (macos_script_path, windows_script_path)
+        Tuple of (macos_script_path, windows_script_path, linux_script_path)
     """
     # macOS .command script (zsh) - navigates to ../data/
     macos_script = f'''#!/bin/zsh
@@ -154,7 +156,7 @@ echo "Working directory: $(pwd)"
 echo ""
 
 # Create temporary log file using mktemp for better cleanup
-LOG_FILE=$(mktemp /tmp/serve_output_XXXXXX.log)
+LOG_FILE=$(mktemp /tmp/serve_output.XXXXXX)
 
 # Start the Python server in background and capture output
 # Note: Not passing port argument to allow auto-port detection
@@ -290,6 +292,102 @@ if exist %PID_FILE% (
 del /f /q %LOG_FILE% >nul 2>&1
 '''
 
+    # Linux .sh script (bash) - navigates to ../data/
+    linux_script = f'''#!/bin/bash
+# Directory Index Viewer Launcher (Linux)
+# Run this file to start the server and open the viewer
+
+SCRIPT_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" && pwd )"
+cd "$SCRIPT_DIR/../data"
+
+echo "Starting Directory Index Viewer"
+echo "============================================================"
+echo ""
+echo "Working directory: $(pwd)"
+echo ""
+
+# Create temporary log file using mktemp for better cleanup
+LOG_FILE=$(mktemp /tmp/serve_output.XXXXXX)
+
+# Start the Python server in background and capture output
+# Note: Not passing port argument to allow auto-port detection
+python3 serve.py > "$LOG_FILE" 2>&1 &
+SERVER_PID=$!
+
+echo "Server PID: $SERVER_PID"
+echo "Server starting..."
+echo ""
+
+# Wait for server to start and output port (polling with timeout)
+ACTUAL_PORT=""
+MAX_WAIT=30
+ELAPSED=0
+
+while [ -z "$ACTUAL_PORT" ] && [ $ELAPSED -lt $MAX_WAIT ]; do
+    sleep 0.5
+    ELAPSED=$((ELAPSED + 1))
+
+    # Extract actual port from server output
+    if [ -f "$LOG_FILE" ]; then
+        ACTUAL_PORT=$(grep -o "ACTUAL_PORT=[0-9]*" "$LOG_FILE" | cut -d= -f2)
+    fi
+done
+
+if [ -z "$ACTUAL_PORT" ]; then
+    echo "Warning: Could not detect server port, defaulting to {port}"
+    ACTUAL_PORT={port}
+else
+    echo "Server started on http://localhost:$ACTUAL_PORT"
+    echo ""
+fi
+
+echo "Opening browser..."
+echo ""
+
+# Open browser (xdg-open is standard on Linux)
+xdg-open "http://localhost:$ACTUAL_PORT/{html_filename}" 2>/dev/null
+
+echo "Server is running. Close this window to stop the server."
+echo "============================================================"
+echo ""
+echo "ACTUAL_PORT=$ACTUAL_PORT"
+echo "============================================================"
+echo "Directory Index Viewer Server"
+echo "============================================================"
+echo "Serving at http://localhost:$ACTUAL_PORT"
+echo ""
+echo "Open in browser: http://localhost:$ACTUAL_PORT/{html_filename}"
+echo ""
+echo "Press Ctrl+C to stop the server"
+echo "============================================================"
+
+# Cleanup function
+cleanup() {{
+    echo ""
+    echo "Shutting down server..."
+
+    # Kill the server process
+    if [ ! -z "$SERVER_PID" ]; then
+        kill $SERVER_PID 2>/dev/null
+    fi
+
+    # Also kill any lingering python serve.py processes
+    pkill -f "python.*serve.py" 2>/dev/null
+
+    # Clean up log file
+    rm -f "$LOG_FILE"
+
+    echo "Server stopped."
+    exit 0
+}}
+
+# Set up signal handlers
+trap cleanup SIGINT SIGTERM EXIT
+
+# Wait for server process
+wait $SERVER_PID
+'''
+
     # Write macOS script
     macos_path = os.path.join(macos_dir, 'start-viewer.command')
     with open(macos_path, 'w') as f:
@@ -306,4 +404,15 @@ del /f /q %LOG_FILE% >nul 2>&1
     with open(windows_path, 'w') as f:
         f.write(windows_script)
 
-    return macos_path, windows_path
+    # Write Linux script
+    linux_path = os.path.join(linux_dir, 'start-viewer.sh')
+    with open(linux_path, 'w') as f:
+        f.write(linux_script)
+
+    # Make Linux script executable
+    try:
+        os.chmod(linux_path, 0o755)
+    except (NotImplementedError, OSError):
+        pass
+
+    return macos_path, windows_path, linux_path

@@ -44,6 +44,7 @@ class OutputPathResolver:
                     return self._generate_file_in_dir(output_path)
                 else:
                     # Use as filename (file or non-existent path)
+                    output_path = self._ensure_html_extension(output_path)
                     return str(output_path)
             else:
                 # Relative path specified - create subfolder in target directory
@@ -63,7 +64,8 @@ class OutputPathResolver:
         base_name = relative_path.stem  # filename without extension
         output_dir = self.root_path / base_name
         output_dir.mkdir(exist_ok=True)
-        return str(output_dir / relative_path.name)
+        final_name = self._ensure_html_extension(Path(relative_path.name))
+        return str(output_dir / final_name)
 
     def _auto_generate_path(self) -> str:
         """Auto-generate a timestamped path in root directory."""
@@ -72,6 +74,19 @@ class OutputPathResolver:
         output_dir = self.root_path / base_name
         output_dir.mkdir(exist_ok=True)
         return str(output_dir / f"{base_name}.html")
+
+    def _ensure_html_extension(self, path: Path) -> Path:
+        """Ensure the path ends with .html extension.
+
+        Args:
+            path: Path object to check
+
+        Returns:
+            Path with .html extension appended if it doesn't already end with .html
+        """
+        if not str(path).endswith('.html'):
+            return Path(str(path) + '.html')
+        return path
 
     @staticmethod
     def get_directory_name(path: str) -> str:

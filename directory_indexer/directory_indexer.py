@@ -119,16 +119,18 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
 
     # Create folder structure
     output_path_obj = Path(output_file)
-    base_output_dir = output_path_obj.parent
+    base_output_dir = output_path_obj.parent / output_path_obj.stem
 
     # Create subdirectories
     data_dir = base_output_dir / 'data'
     macos_dir = base_output_dir / 'macOS'
     windows_dir = base_output_dir / 'Windows'
+    linux_dir = base_output_dir / 'Linux'
 
     data_dir.mkdir(parents=True, exist_ok=True)
     macos_dir.mkdir(parents=True, exist_ok=True)
     windows_dir.mkdir(parents=True, exist_ok=True)
+    linux_dir.mkdir(parents=True, exist_ok=True)
 
     # Update file paths to use data directory
     html_basename = output_path_obj.name
@@ -165,11 +167,12 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
     print(f"✓ Server script created: {server_script}")
 
     # Generate launcher scripts (in platform folders)
-    macos_launcher, windows_launcher = generate_launcher_scripts(
-        str(macos_dir), str(windows_dir), html_basename
+    macos_launcher, windows_launcher, linux_launcher = generate_launcher_scripts(
+        str(macos_dir), str(windows_dir), str(linux_dir), html_basename
     )
     print(f"✓ macOS launcher created: {macos_launcher}")
     print(f"✓ Windows launcher created: {windows_launcher}")
+    print(f"✓ Linux launcher created: {linux_launcher}")
 
     print(f"\n{'=' * 60}")
     print(f"Summary:")
@@ -181,12 +184,15 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
     print(f"      {Path(db_filename).name} ({SizeFormatter.format_size(db_size)})")
     print(f"      serve.py")
     print(f"    macOS/")
-    print(f"      start.command")
+    print(f"      start-viewer.command")
     print(f"    Windows/")
-    print(f"      start.bat")
+    print(f"      start-viewer.bat")
+    print(f"    Linux/")
+    print(f"      start-viewer.sh")
     print(f"\nQuick start:")
-    print(f"  macOS:   Double-click macOS/start.command")
-    print(f"  Windows: Double-click Windows/start.bat")
+    print(f"  macOS:   Double-click macOS/start-viewer.command")
+    print(f"  Windows: Double-click Windows/start-viewer.bat")
+    print(f"  Linux:   bash Linux/start-viewer.sh")
     print(f"  Manual:  cd data && python serve.py")
     print(f"{'=' * 60}\n")
 
