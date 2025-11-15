@@ -21,6 +21,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
@@ -226,14 +227,14 @@ class ClipInstance:
             return f"{self.source_file} (Instance {self.instance_number})"
         return self.source_file
 
-    @property
+    @cached_property
     def source_duration_frames(self) -> int:
-        """Calculate source duration in frames"""
+        """Calculate source duration in frames (cached for performance)"""
         return self.source_out - self.source_in
 
-    @property
+    @cached_property
     def sequence_duration_frames(self) -> int:
-        """Calculate sequence duration in frames"""
+        """Calculate sequence duration in frames (cached for performance)"""
         return self.sequence_out - self.sequence_in
 
     def get_instance_note(self) -> str:
@@ -540,6 +541,18 @@ class EDLParser(ABC):
             return False
         return True
 
+    def _validate_and_warn(self, instances: List[ClipInstance]) -> None:
+        """
+        Validate clip instances and print warnings.
+
+        Args:
+            instances: List of ClipInstance objects to validate
+        """
+        for instance in instances:
+            warnings = instance.validate()
+            for warning in warnings:
+                print(f"Warning: {warning}")
+
 
 class PycmxEDLParser(EDLParser):
     """
@@ -605,10 +618,7 @@ class PycmxEDLParser(EDLParser):
             all_instances.extend(instances)
 
         # Validate instances and print warnings
-        for instance in all_instances:
-            warnings = instance.validate()
-            for warning in warnings:
-                print(f"Warning: {warning}")
+        self._validate_and_warn(all_instances)
 
         return all_instances
 
@@ -672,10 +682,7 @@ class BuiltinEDLParser(EDLParser):
             all_instances.extend(instances)
 
         # Validate instances and print warnings
-        for instance in all_instances:
-            warnings = instance.validate()
-            for warning in warnings:
-                print(f"Warning: {warning}")
+        self._validate_and_warn(all_instances)
 
         return all_instances
 
@@ -1031,6 +1038,7 @@ class ExcelFormatter(OutputFormatter):
 
         try:
             from openpyxl.worksheet.table import Table, TableStyleInfo
+            from openpyxl.utils import get_column_letter
 
             df = pd.DataFrame(data)
 
@@ -1049,10 +1057,10 @@ class ExcelFormatter(OutputFormatter):
                         df[col].astype(str).map(len).max(),
                         len(col)
                     ) + 2
-                    worksheet.column_dimensions[chr(65 + i)].width = min(max_width, 50)
+                    worksheet.column_dimensions[get_column_letter(i + 1)].width = min(max_width, 50)
 
                 # Format EDL Clips sheet as table
-                edl_table_ref = f"A1:{chr(64 + len(df.columns))}{len(df) + 1}"
+                edl_table_ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
                 edl_table = Table(displayName="EDLClipsTable", ref=edl_table_ref)
                 edl_style = TableStyleInfo(
                     name="TableStyleLight1",
@@ -1088,10 +1096,10 @@ class ExcelFormatter(OutputFormatter):
                             stats_df[col].astype(str).map(len).max(),
                             len(col)
                         ) + 2
-                        stats_worksheet.column_dimensions[chr(65 + i)].width = min(max_width, 50)
+                        stats_worksheet.column_dimensions[get_column_letter(i + 1)].width = min(max_width, 50)
 
                     # Format Statistics sheet as table
-                    stats_table_ref = f"A1:{chr(64 + len(stats_df.columns))}{len(stats_df) + 1}"
+                    stats_table_ref = f"A1:{get_column_letter(len(stats_df.columns))}{len(stats_df) + 1}"
                     stats_table = Table(displayName="StatisticsTable", ref=stats_table_ref)
                     stats_style = TableStyleInfo(
                         name="TableStyleLight1",
@@ -1450,7 +1458,8 @@ class AnalyticsReportGenerator:
                             try:
                                 if len(str(cell.value)) > max_length:
                                     max_length = len(str(cell.value))
-                            except:
+                            except (AttributeError, TypeError):
+                                # Skip cells without values or non-stringifiable content
                                 pass
                         adjusted_width = min(max_length + 2, 50)
                         worksheet.column_dimensions[column_letter].width = adjusted_width
