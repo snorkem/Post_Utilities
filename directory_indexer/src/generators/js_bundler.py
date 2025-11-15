@@ -198,8 +198,8 @@ class JavaScriptBundler:
             str: HTML script tags for external dependencies
         """
         if mode == 'db' or mode == 'database':
-            # Database mode requires sql.js
-            return '''<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>'''
+            # Database mode requires sql.js (loaded from local lib/ directory)
+            return '''<script src="lib/sql-wasm.js"></script>'''
         else:
             # JSON mode has no external dependencies
             return ''

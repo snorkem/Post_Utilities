@@ -11,14 +11,12 @@ This is the refactored entry point that uses the modular architecture from src/.
 import sys
 import argparse
 from pathlib import Path
-from datetime import datetime
 
 # Import refactored components
 from src.config.settings import DatabaseConfig
 from src.core.scanner import DirectoryScanner
 from src.core.database import DatabaseManager
 from src.core.tree_builder import DirectoryTreeBuilder
-from src.models import ScanResult
 from src.utils.formatting import SizeFormatter
 from src.utils.path_resolver import OutputPathResolver
 from src.generators.json_generator import JsonGenerator
@@ -183,6 +181,9 @@ def run_database_mode(scan_result, root_path: str, output_file: str, forced: boo
     print(f"      {html_basename}")
     print(f"      {Path(db_filename).name} ({SizeFormatter.format_size(db_size)})")
     print(f"      serve.py")
+    print(f"      lib/")
+    print(f"        sql-wasm.js")
+    print(f"        sql-wasm.wasm")
     print(f"    macOS/")
     print(f"      start-viewer.command")
     print(f"    Windows/")

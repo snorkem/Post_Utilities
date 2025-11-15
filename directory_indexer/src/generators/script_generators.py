@@ -347,16 +347,9 @@ echo ""
 # Open browser (xdg-open is standard on Linux)
 xdg-open "http://localhost:$ACTUAL_PORT/{html_filename}" 2>/dev/null
 
-echo "Server is running. Close this window to stop the server."
-echo "============================================================"
 echo ""
-echo "ACTUAL_PORT=$ACTUAL_PORT"
-echo "============================================================"
-echo "Directory Index Viewer Server"
-echo "============================================================"
-echo "Serving at http://localhost:$ACTUAL_PORT"
-echo ""
-echo "Open in browser: http://localhost:$ACTUAL_PORT/{html_filename}"
+echo "Server is running at http://localhost:$ACTUAL_PORT"
+echo "Browser opened to: http://localhost:$ACTUAL_PORT/{html_filename}"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo "============================================================"

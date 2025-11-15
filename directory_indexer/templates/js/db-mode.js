@@ -51,7 +51,7 @@ async function initDatabase() {
 
         // Initialize SQL.js
         const SQL = await initSqlJs({
-            locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+            locateFile: file => `lib/${file}`
         });
 
         updateLoadingProgress(30, 'Fetching database file...');

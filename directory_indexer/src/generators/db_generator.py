@@ -4,6 +4,7 @@ Generates HTML viewer with external SQLite database for directory indexer
 """
 
 import sys
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
@@ -29,6 +30,38 @@ class DbGenerator:
         self.component_builder = ComponentBuilder()
         self.js_bundler = JavaScriptBundler()
         self.stats_builder = StatisticsBuilder()
+
+    def _copy_sqljs_library(self, data_dir: str) -> None:
+        """
+        Copy sql.js library files to the output data directory.
+
+        Args:
+            data_dir: Path to the data directory where files will be copied
+        """
+        # Get path to vendor directory
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent
+        vendor_dir = project_root / 'templates' / 'vendor' / 'sql.js' / '1.8.0'
+
+        # Create lib subdirectory in data folder
+        lib_dir = Path(data_dir) / 'lib'
+        lib_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy sql.js files
+        files_to_copy = ['sql-wasm.js', 'sql-wasm.wasm']
+
+        for filename in files_to_copy:
+            src = vendor_dir / filename
+            dst = lib_dir / filename
+
+            if not src.exists():
+                raise FileNotFoundError(
+                    f"sql.js library file not found: {src}\n"
+                    f"Please ensure sql.js files are present in templates/vendor/sql.js/1.8.0/"
+                )
+
+            shutil.copy2(src, dst)
+            print(f"  Copied: {filename} -> lib/")
 
     def generate(
         self,
@@ -58,6 +91,11 @@ class DbGenerator:
         context = self._build_context(
             db_filename, root_path, total_size, extension_stats, files_data, db_size
         )
+
+        # Copy sql.js library files to data directory
+        print("Copying sql.js library files...")
+        output_dir = str(Path(output_file).parent)
+        self._copy_sqljs_library(output_dir)
 
         print("Loading HTML templates...")
 

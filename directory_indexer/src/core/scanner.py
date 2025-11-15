@@ -28,6 +28,7 @@ class DirectoryScanner:
         self.files_data: List[FileInfo] = []
         self.total_size = 0
         self.error_count = 0
+        self.skipped_dirs = 0
         self.extension_stats = defaultdict(lambda: {'count': 0, 'size': 0})
 
     def scan(self) -> ScanResult:
@@ -52,8 +53,13 @@ class DirectoryScanner:
         self._scan_directory(self.root_path)
 
         print(f"✓ Scan complete: {len(self.files_data)} files found")
-        if self.error_count > 0:
-            print(f"  ({self.error_count} files skipped due to permission errors)")
+        if self.error_count > 0 or self.skipped_dirs > 0:
+            error_parts = []
+            if self.error_count > 0:
+                error_parts.append(f"{self.error_count} file{'s' if self.error_count != 1 else ''}")
+            if self.skipped_dirs > 0:
+                error_parts.append(f"{self.skipped_dirs} director{'ies' if self.skipped_dirs != 1 else 'y'}")
+            print(f"  ({' and '.join(error_parts)} skipped due to permission errors)")
 
         # Convert defaultdict back to regular dict for compatibility
         extension_stats_dict = dict(self.extension_stats)
@@ -90,12 +96,13 @@ class DirectoryScanner:
                             self._scan_directory(Path(entry.path))
 
                     except (PermissionError, OSError):
-                        # Skip files/dirs we can't access
+                        # Skip files/dirs we can't access at the entry level
+                        # Note: File processing errors are counted in _process_file_from_entry
                         continue
 
         except (PermissionError, OSError):
-            # Can't access this directory
-            self.error_count += 1
+            # Can't access this directory itself
+            self.skipped_dirs += 1
 
     def _process_file_from_entry(self, entry: os.DirEntry) -> FileInfo:
         """Process a single file from os.scandir() entry.
