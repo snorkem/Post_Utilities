@@ -60,6 +60,34 @@ Your visual directory explorer and archival wizard! Creates interactive HTML arc
 - Auto-generates launcher scripts for macOS and Windows
 - Works completely offline - perfect for archiving project drives!
 
+### 7. Sony XML to Avid Markers Converter
+**File:** `sony_xml_to_avid.py`
+
+Transforms Sony camera XML metadata into Avid-ready markers. This converter:
+- Parses user-generated shot markers from Sony XML files
+- Generates tab-delimited Avid marker import files
+- Auto-maps marker colors (Blue, Green, Red) based on shot mark type
+- Supports recursive directory processing for bulk conversions
+- Allows timecode offset adjustments for syncing markers
+
+### 8. EDL Parser
+**File:** `MX_edl_parser.py`
+
+A robust CMX3600 EDL parser for creating music cue sheets. Features include:
+- Detects multiple instances of clips when they appear with gaps in the timeline
+- Outputs to text, CSV, or Excel with formatted tables
+- Generates analytics reports with clip statistics and usage percentages
+- Tracks source and sequence timecodes with frame-accurate duration calculations
+
+### 9. MediaSilo to Avid Markers Converter
+**File:** `MediaSilo_to_Avid.py`
+
+Converts MediaSilo CSV marker exports into Avid-compatible marker files. This tool:
+- Parses MediaSilo's CSV marker export format
+- Combines comments from duplicate timecodes into single markers
+- Sanitizes special characters for Avid compatibility
+- Available in both CLI and GUI versions
+
 ## Get Started
 
 Grab the dependencies from the requirments.txt in each utility folder:

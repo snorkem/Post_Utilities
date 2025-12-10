@@ -28,13 +28,36 @@ import traceback
 import xxhash
 
 
+# Global reference to active processor for signal handler cleanup
+_active_processor = None
+
+
+def set_active_processor(processor):
+    """Set the active processor for signal handler cleanup."""
+    global _active_processor
+    _active_processor = processor
+
+
 # Set up signal handlers for graceful termination
 def setup_signal_handlers():
     """Configure signal handlers for graceful termination."""
     def signal_handler(sig, frame):
         print("\nReceived termination signal. Cleaning up...")
+        # Perform actual cleanup if processor is active
+        if _active_processor is not None:
+            try:
+                # Flush any pending log writes
+                if hasattr(_active_processor, 'logger'):
+                    _active_processor.logger.log("Operation interrupted by signal")
+                # Log partial statistics if available
+                if hasattr(_active_processor, 'copied_files'):
+                    _active_processor.logger.log(
+                        f"Partial results: {_active_processor.copied_files} files copied before interruption"
+                    )
+            except Exception:
+                pass  # Don't let cleanup errors prevent exit
         sys.exit(130)  # 128 + SIGINT(2) = 130
-        
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
@@ -782,31 +805,6 @@ class FileFinder:
     def _get_file_size_mb(self, file_path: str) -> float:
         """Get file size in megabytes."""
         return os.path.getsize(file_path) / (1024 * 1024)
-    
-    def _similarity_score(self, str1: str, str2: str) -> float:
-        """
-        Calculate a similarity score between two strings.
-        Used for fuzzy matching when exact matches fail.
-        
-        Args:
-            str1: First string
-            str2: Second string
-            
-        Returns:
-            Similarity score (0-1)
-        """
-        # Simple implementation using common substrings
-        # For more advanced fuzzy matching, consider libraries like fuzzywuzzy
-        if not str1 or not str2:
-            return 0
-            
-        # Find common characters
-        s1, s2 = set(str1), set(str2)
-        common_chars = len(s1.intersection(s2))
-        total_chars = len(s1.union(s2))
-        
-        # Calculate similarity
-        return common_chars / total_chars if total_chars > 0 else 0
 
 
 class FileCopier:
@@ -984,57 +982,73 @@ class FileCopier:
     def _calculate_sample_hash(self, file_path: str) -> str:
         """
         Calculate a hash for very large files by sampling specific parts of the file.
-        
+
         This method calculates a hash based on:
         - First 16 KB
         - Middle 16 KB
         - Last 16 KB
-        
+
         Args:
             file_path: Path to the file
-            
+
         Returns:
             XXHash64 hash of sampled file sections
+
+        Raises:
+            OSError: If file cannot be read
         """
         hasher = xxhash.xxh64()
-        file_size = os.path.getsize(file_path)
-        
-        with open(file_path, 'rb') as f:
+        f = None
+        try:
+            file_size = os.path.getsize(file_path)
+            f = open(file_path, 'rb')
+
             # Sample sections for very large files
             sample_size = 16 * 1024  # 16 KB
-            
+
             # Read first 16 KB
             f.seek(0)
             hasher.update(f.read(sample_size))
-            
+
             # Read middle 16 KB
             if file_size > 3 * sample_size:
                 f.seek(file_size // 2 - sample_size // 2)
                 hasher.update(f.read(sample_size))
-            
+
             # Read last 16 KB
             if file_size > 2 * sample_size:
                 f.seek(file_size - sample_size)
                 hasher.update(f.read(sample_size))
-        
-        return hasher.hexdigest()
+
+            return hasher.hexdigest()
+        finally:
+            if f is not None:
+                f.close()
     
     def _calculate_file_hash(self, file_path: str) -> str:
         """
         Calculate XXHash64 hash of a file.
-        
+
         Args:
             file_path: Path to the file
-            
+
         Returns:
             XXHash64 hash as hex string
+
+        Raises:
+            OSError: If file cannot be read
         """
         hasher = xxhash.xxh64()
-        with open(file_path, 'rb') as f:
+        f = None
+        try:
+            f = open(file_path, 'rb')
             # Read file in chunks to avoid loading large files into memory
             for chunk in iter(lambda: f.read(4096), b''):
                 hasher.update(chunk)
-        return hasher.hexdigest()
+            return hasher.hexdigest()
+        finally:
+            if f is not None:
+                f.close()
     
     def _calculate_transfer_speed(self) -> float:
         """Calculate current transfer speed in MB/s."""
@@ -1241,12 +1255,7 @@ class FileProcessor:
                 
                 # Reset the unique source paths for each destination
                 self.unique_src_paths = set()
-                
-                # Initialize per-destination statistics
-                self.found_files = 0
-                self.copied_files = 0
-                self.existing_files = 0
-                
+
                 # Process matched files for this destination
                 expanded_dest_dir = os.path.expanduser(dest_dir)
                 all_files_to_process = []
@@ -1277,8 +1286,13 @@ class FileProcessor:
                                 self.logger.log_existing(filename)
                                 self.logger.debug(f"File already exists: {dest_path}")
                 
-                # Calculate total size of files to copy
-                total_size_bytes = sum(os.path.getsize(src) for src, _ in all_files_to_copy)
+                # Calculate total size of files to copy (handle missing files gracefully)
+                total_size_bytes = 0
+                for src, _ in all_files_to_copy:
+                    try:
+                        total_size_bytes += os.path.getsize(src)
+                    except (OSError, IOError) as e:
+                        self.logger.debug(f"Could not get size for {src}: {e}")
                 total_size_kb = total_size_bytes // 1024
                 
                 # Check disk space for this destination
@@ -1310,14 +1324,19 @@ class FileProcessor:
             # Transfer filter statistics from file_finder to processor
             self.excluded_files = self.file_finder.excluded_files
             self.size_exceeded_files = self.file_finder.size_exceeded_files
-            
+
+            # Check for copy failures and update return value
+            if self.file_copier.copy_failures:
+                self.logger.log(f"Warning: {len(self.file_copier.copy_failures)} files failed to copy")
+                overall_result = 1
+
             # Calculate elapsed time
             elapsed_time = time.time() - start_time
             self.logger.debug(f"Operation completed in {elapsed_time:.2f} seconds")
-            
+
             # Log overall summary
             self._log_summary(elapsed_time)
-            
+
             return overall_result
 
         except KeyboardInterrupt:
@@ -1599,10 +1618,18 @@ def main():
     """Main entry point for the script."""
     # Setup signal handlers for graceful termination
     setup_signal_handlers()
-    
+
     try:
         args = parse_arguments()
+
+        # Validate max_size parameter
+        if args.max_size < 0:
+            print("Error: --max-size cannot be negative")
+            return 1
+
         processor = FileProcessor(args)
+        # Register processor for signal handler cleanup
+        set_active_processor(processor)
         return processor.run()
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")
